@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "containers/darray.h"
+
 // Forward declarations
 keys translate_keycode(unsigned short keycode);
 
@@ -33,7 +35,7 @@ keys translate_keycode(unsigned short keycode);
     NSRect frame = [window contentRectForFrameRect:[window frame]];
     KDEBUG("Window resized: %dx%d", (i32)frame.size.width, (i32)frame.size.height);
 }
-@end
+@end 
 
 // Custom NSView to handle input events and Metal rendering
 @interface KohiContentView : NSView
@@ -379,6 +381,11 @@ void platform_sleep(u64 ms) {
     req.tv_sec = ms / 1000;
     req.tv_nsec = (ms % 1000) * 1000000;
     nanosleep(&req, NULL);
+}
+
+void platform_get_required_extension_names(const char ***names__darray) {
+    // For macOS platform, we need to add the VK_MVK_macos_surface extension.
+    darray_push(*names__darray, &VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
 }
 
 // Key translation from macOS keycodes

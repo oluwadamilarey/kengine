@@ -2,6 +2,12 @@
 triple:          'arm64-apple-darwin'
 binary-path:     '../bin/testbed'
 relocations:
-  - { offset: 0x26, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100003DD0, symSize: 0x118 }
-  - { offset: 0x48, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100003DD0, symSize: 0x118 }
+  - { offset: 0x26, size: 0x8, addend: 0x0, symName: _game_initialize, symObjAddr: 0x0, symBinAddr: 0x100003C04, symSize: 0x34 }
+  - { offset: 0x48, size: 0x8, addend: 0x0, symName: _game_initialize, symObjAddr: 0x0, symBinAddr: 0x100003C04, symSize: 0x34 }
+  - { offset: 0x70, size: 0x8, addend: 0x0, symName: _game_update, symObjAddr: 0x34, symBinAddr: 0x100003C38, symSize: 0x1C }
+  - { offset: 0xA6, size: 0x8, addend: 0x0, symName: _game_render, symObjAddr: 0x50, symBinAddr: 0x100003C54, symSize: 0x1C }
+  - { offset: 0xDC, size: 0x8, addend: 0x0, symName: _game_on_resize, symObjAddr: 0x6C, symBinAddr: 0x100003C70, symSize: 0x18 }
+  - { offset: 0x27A, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100003C88, symSize: 0x118 }
+  - { offset: 0x29C, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100003C88, symSize: 0x118 }
+  - { offset: 0x2C4, size: 0x8, addend: 0x0, symName: _create_game, symObjAddr: 0x118, symBinAddr: 0x100003DA0, symSize: 0xB4 }
 ...

@@ -4,7 +4,7 @@ set -e
 
 mkdir -p ../bin
 
-cFilenames=$(find . -type f -name "*.c")
+cFilenames=$(find . -type f \( -name "*.c" -o -name "*.m" \))
 assembly="engine"
 compilerFlags="-g -shared -fPIC -mmacosx-version-min=10.15"
 

@@ -184,6 +184,11 @@ void platform_sleep(u64 ms) {
     Sleep(ms);
 }
 
+void platform_get_required_extension_names(const char ***names__darray) {
+    // For Win32 platform, we need to add the VK_KHR_win32_surface extension.
+    darray_push(*names__darray, &VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+}
+
 LRESULT CALLBACK win32_process_message(HWND hwnd, u32 msg, WPARAM w_param, LPARAM l_param) {
     switch (msg) {
         case WM_ERASEBKGND:

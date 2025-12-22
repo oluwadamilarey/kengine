@@ -3,7 +3,7 @@
  * @author Travis Vroman (travis@kohiengine.com)
  * @brief This file contains global type definitions which are used
  * throughout the entire engine and applications referencing it.
- * Numeric types are asserted statically to gurantee expected size.
+ * Numeric types are asserted statically to guarantee expected size.
  * @version 2.0
  * @date 2024-04-03
  *
@@ -116,10 +116,10 @@ STATIC_ASSERT(sizeof(f32) == 4, "Expected f32 to be 4 bytes.");
 STATIC_ASSERT(sizeof(f64) == 8, "Expected f64 to be 8 bytes.");
 
 /** @brief True.*/
-#define true 1
+#define TRUE 1
 
 /** @brief False. */
-#define false 0
+#define FALSE 0
 
 /**
  * @brief Any id set to this should be considered invalid,
