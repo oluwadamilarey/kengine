@@ -5,6 +5,7 @@
 #define KASSERTIONS_ENABLED
 
 #ifdef KASSERTIONS_ENABLED
+
 #if _MSC_VER
 #include <intrin.h>
 #define debugBreak() __debugbreak()
@@ -31,12 +32,13 @@ KAPI void report_assertion_failure(const char* expression, const char* message, 
     }
 
 #ifdef _DEBUG
-#define KASSERT_DEBUG(expr) {                                        \
-    if (expr) {                                                      \
-        report_assertion_failure(#expr, "", __FILE__, __LINE__);     \
-        debugBreak();                                                \
-    }                                                                \
-}
+#define KASSERT_DEBUG(expr)                                          \
+    {                                                                \
+        if (!(expr)) {                                               \
+            report_assertion_failure(#expr, "", __FILE__, __LINE__); \
+            debugBreak();                                            \
+        }                                                            \
+    }
 #else
 #define KASSERT_DEBUG(expr)
 #endif

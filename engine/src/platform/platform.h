@@ -1,7 +1,8 @@
 #pragma once
-
+#include <vulkan/vulkan.h>
 #include "defines.h"
-
+#include <vulkan/vulkan.h>
+#include "renderer/vulkan/vulkan_types.inl"
 typedef struct platform_state {
     void* internal_state;
 } platform_state;
@@ -33,3 +34,6 @@ f64 platform_get_absolute_time(platform_state* plat_state);
 // Should only be used for giving time back to the OS for unsused update power
 // therefore it is not exported.
 void platform_sleep(u64 ms);
+b8 platform_create_vulkan_surface(
+    platform_state* plat_state,
+    vulkan_context* context);

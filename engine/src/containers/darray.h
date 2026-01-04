@@ -9,7 +9,6 @@ u64 length = number of elements currently contained
 u64 stride = size of each element in bytes
 void* elements
 */
-
 enum {
     DARRAY_CAPACITY,
     DARRAY_LENGTH,

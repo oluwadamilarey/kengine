@@ -3,7 +3,6 @@
 // Linux platform layer.
 #if KPLATFORM_LINUX
 
-
 #include "core/event.h"
 #include "core/input.h"
 #include "core/logger.h"
@@ -25,6 +24,10 @@
 #include <stdio.h>
 #include <string.h>
 
+// for surface creation
+#include "VK_USE_PLATFORM_XCB_KHR"
+#include <vulkan/vulkan.h>
+#include "renderer/vulkan/vulkan_types.inl"
 
 #include "containers/darray.h"
 typedef struct internal_state {
@@ -34,11 +37,11 @@ typedef struct internal_state {
     xcb_screen_t* screen;
     xcb_atom_t wm_protocols;
     xcb_atom_t wm_delete_win;
+    VkSurfaceKHR surface;
 } internal_state;
 
 // Key translation
 keys translate_keycode(u32 x_keycode);
-
 
 b8 platform_startup(
     platform_state* plat_state,
@@ -101,12 +104,12 @@ b8 platform_startup(
         XCB_COPY_FROM_PARENT,  // depth
         state->window,
         state->screen->root,            // parent
-        x,                              //x
-        y,                              //y
-        width,                          //width
-        height,                         //height
+        x,                              // x
+        y,                              // y
+        width,                          // width
+        height,                         // height
         0,                              // No border
-        XCB_WINDOW_CLASS_INPUT_OUTPUT,  //class
+        XCB_WINDOW_CLASS_INPUT_OUTPUT,  // class
         state->screen->root_visual,
         event_mask,
         value_list);
@@ -200,15 +203,14 @@ b8 platform_pump_messages(platform_state* plat_state) {
             case XCB_KEY_RELEASE: {
                 // TODO: Key presses and releases
                 // Key press event - xcb_key_press_event_t and xcb_key_release_event_t are the same
-                xcb_key_press_event_t *kb_event = (xcb_key_press_event_t *)event;
+                xcb_key_press_event_t* kb_event = (xcb_key_press_event_t*)event;
                 b8 pressed = event->response_type == XCB_KEY_PRESS;
                 xcb_keycode_t code = kb_event->detail;
                 KeySym key_sym = XkbKeycodeToKeysym(
                     state->display,
-                    (KeyCode)code,  //event.xkey.keycode,
+                    (KeyCode)code,  // event.xkey.keycode,
                     0,
                     code & ShiftMask ? 1 : 0);
-
                 keys key = translate_keycode(key_sym);
 
                 // Pass to the input subsystem for processing.
@@ -217,7 +219,7 @@ b8 platform_pump_messages(platform_state* plat_state) {
             case XCB_BUTTON_PRESS:
             case XCB_BUTTON_RELEASE: {
                 // TODO: Mouse button presses and releases
-                xcb_button_press_event_t *mouse_event = (xcb_button_press_event_t *)event;
+                xcb_button_press_event_t* mouse_event = (xcb_button_press_event_t*)event;
                 b8 pressed = event->response_type == XCB_BUTTON_PRESS;
                 buttons mouse_button = BUTTON_MAX_BUTTONS;
                 switch (mouse_event->detail) {
@@ -240,7 +242,7 @@ b8 platform_pump_messages(platform_state* plat_state) {
             case XCB_MOTION_NOTIFY:
                 // TODO: mouse movement
                 // Mouse move
-                xcb_motion_notify_event_t *move_event = (xcb_motion_notify_event_t *)event;
+                xcb_motion_notify_event_t* move_event = (xcb_motion_notify_event_t*)event;
 
                 // Pass over to the input subsystem.
                 input_process_mouse_move(move_event->event_x, move_event->event_y);
@@ -295,7 +297,7 @@ void platform_console_write_error(const char* message, u8 colour) {
     printf("\033[%sm%s\033[0m", colour_strings[colour], message);
 }
 
-f64 platform_get_absolute_time() {
+f64 platform_get_absolute_time(platform_state* plat_state) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     return now.tv_sec + now.tv_nsec * 0.000000001;
@@ -315,6 +317,23 @@ void platform_sleep(u64 ms) {
 #endif
 }
 
+// surface creation for vulkan
+b8 platform_create_vulkan_surface(platform_state* plat_state, vulkan_context* context) {
+    internal_state* state = (internal_state*)plat_state->internal_state;
+
+    VkXcbSurfaceCreateInfoKHR create_info = {VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR};
+    create_info.connection = state->connection;
+    create_info.window = state->window;
+
+    VkResult result = vkCreateXcbSurfaceKHR(context->instance, &create_info, context->allocator, &state->surface);
+    if (result != VK_SUCCESS) {
+        KERROR("Failed to create Linux Vulkan surface. Error code: %d", result);
+        return FALSE;
+    }
+    context->surface = state->surface;
+    return TRUE;
+}
+
 void platform_get_required_extension_names(const char*** names__darray) {
     // For Linux platform, we need to add the VK_KHR_xcb_surface extension.
     darray_push(*names__darray, &VK_KHR_XCB_SURFACE_EXTENSION_NAME);
@@ -328,8 +347,8 @@ keys translate_keycode(u32 x_keycode) {
             return KEY_ENTER;
         case XK_Tab:
             return KEY_TAB;
-            //case XK_Shift: return KEY_SHIFT;
-            //case XK_Control: return KEY_CONTROL;
+            // case XK_Shift: return KEY_SHIFT;
+            // case XK_Control: return KEY_CONTROL;
 
         case XK_Pause:
             return KEY_PAUSE;

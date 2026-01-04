@@ -10,9 +10,16 @@
 
 #include <stdlib.h>
 
+// for surface creation
+#include "VK_USE_PLATFORM_WIN32_KHR.h"
+#include <vulkan/vulkan.h>
+#include "renderer/vulkan/vulkan_types.inl"
+
 typedef struct internal_state {
     HINSTANCE h_instance;
     HWND hwnd;
+
+    VkSurfaceKHR surface;
 } internal_state;
 
 // Clock
@@ -22,14 +29,14 @@ static LARGE_INTEGER start_time;
 LRESULT CALLBACK win32_process_message(HWND hwnd, u32 msg, WPARAM w_param, LPARAM l_param);
 
 b8 platform_startup(
-    platform_state *plat_state,
-    const char *application_name,
+    platform_state* plat_state,
+    const char* application_name,
     i32 x,
     i32 y,
     i32 width,
     i32 height) {
     plat_state->internal_state = malloc(sizeof(internal_state));
-    internal_state *state = (internal_state *)plat_state->internal_state;
+    internal_state* state = (internal_state*)plat_state->internal_state;
 
     state->h_instance = GetModuleHandleA(0);
 
@@ -112,9 +119,9 @@ b8 platform_startup(
     return TRUE;
 }
 
-void platform_shutdown(platform_state *plat_state) {
+void platform_shutdown(platform_state* plat_state) {
     // Simply cold-cast to the known type.
-    internal_state *state = (internal_state *)plat_state->internal_state;
+    internal_state* state = (internal_state*)plat_state->internal_state;
 
     if (state->hwnd) {
         DestroyWindow(state->hwnd);
@@ -122,7 +129,7 @@ void platform_shutdown(platform_state *plat_state) {
     }
 }
 
-b8 platform_pump_messages(platform_state *plat_state) {
+b8 platform_pump_messages(platform_state* plat_state) {
     MSG message;
     while (PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
         TranslateMessage(&message);
@@ -132,27 +139,27 @@ b8 platform_pump_messages(platform_state *plat_state) {
     return TRUE;
 }
 
-void *platform_allocate(u64 size, b8 aligned) {
+void* platform_allocate(u64 size, b8 aligned) {
     return malloc(size);
 }
 
-void platform_free(void *block, b8 aligned) {
+void platform_free(void* block, b8 aligned) {
     free(block);
 }
 
-void *platform_zero_memory(void *block, u64 size) {
+void* platform_zero_memory(void* block, u64 size) {
     return memset(block, 0, size);
 }
 
-void *platform_copy_memory(void *dest, const void *source, u64 size) {
+void* platform_copy_memory(void* dest, const void* source, u64 size) {
     return memcpy(dest, source, size);
 }
 
-void *platform_set_memory(void *dest, i32 value, u64 size) {
+void* platform_set_memory(void* dest, i32 value, u64 size) {
     return memset(dest, value, size);
 }
 
-void platform_console_write(const char *message, u8 colour) {
+void platform_console_write(const char* message, u8 colour) {
     HANDLE console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
     // FATAL,ERROR,WARN,INFO,DEBUG,TRACE
     static u8 levels[6] = {64, 4, 6, 2, 1, 8};
@@ -163,7 +170,7 @@ void platform_console_write(const char *message, u8 colour) {
     WriteConsoleA(GetStdHandle(STD_OUTPUT_HANDLE), message, (DWORD)length, number_written, 0);
 }
 
-void platform_console_write_error(const char *message, u8 colour) {
+void platform_console_write_error(const char* message, u8 colour) {
     HANDLE console_handle = GetStdHandle(STD_ERROR_HANDLE);
     // FATAL,ERROR,WARN,INFO,DEBUG,TRACE
     static u8 levels[6] = {64, 4, 6, 2, 1, 8};
@@ -184,9 +191,29 @@ void platform_sleep(u64 ms) {
     Sleep(ms);
 }
 
-void platform_get_required_extension_names(const char ***names__darray) {
+void platform_get_required_extension_names(const char*** names__darray) {
     // For Win32 platform, we need to add the VK_KHR_win32_surface extension.
     darray_push(*names__darray, &VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+}
+
+// surface creation for vulkan
+b8 platform_create_vulkan_surface(
+    platform_state* plat_state,
+    VkInstance instance,
+    VkSurfaceKHR* out_surface) {
+    internal_state* state = (internal_state*)plat_state->internal_state;
+
+    VkWin32SurfaceCreateInfoKHR create_info = {VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
+    create_info.hinstance = state->h_instance;
+    create_info.hwnd = state->hwnd;
+
+    VkResult result = vkCreateWin32SurfaceKHR(instance, &create_info, 0, out_surface);
+    if (result != VK_SUCCESS) {
+        KERROR("Failed to create Win32 Vulkan surface. Error code: %d", result);
+        return FALSE;
+    }
+
+    return TRUE;
 }
 
 LRESULT CALLBACK win32_process_message(HWND hwnd, u32 msg, WPARAM w_param, LPARAM l_param) {

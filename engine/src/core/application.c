@@ -70,10 +70,8 @@ b8 application_create(game* game_inst) {
         KFATAL("Failed to initialize renderer. Aborting application.");
         return FALSE;
     }
-
     // Initialize clock system with platform state
     clock_set_platform_state(&app_state.platform);
-
     // Initialize the game.
     if (!app_state.game_inst->initialize(app_state.game_inst)) {
         KFATAL("Game failed to initialize.");

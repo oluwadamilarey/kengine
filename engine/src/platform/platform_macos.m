@@ -1,5 +1,5 @@
 #include "platform.h"
-
+#include <vulkan/vulkan.h>
 // macOS platform layer using native Cocoa/AppKit
 #if KPLATFORM_APPLE
 
@@ -14,6 +14,10 @@
 #include <string.h>
 
 #include "containers/darray.h"
+// // For surface creation - MoltenVK on macOS
+// #define VK_USE_PLATFORM_METAL_EXT  // Define BEFORE including Vulkan headers
+#include <vulkan/vulkan.h>
+#include "renderer/vulkan/vulkan_types.inl"
 
 // Forward declarations
 keys translate_keycode(unsigned short keycode);
@@ -39,9 +43,33 @@ keys translate_keycode(unsigned short keycode);
 
 // Custom NSView to handle input events and Metal rendering
 @interface KohiContentView : NSView
+@property (nonatomic, strong) CAMetalLayer* metalLayer;
 @end
 
 @implementation KohiContentView
+
+- (instancetype)initWithFrame:(NSRect)frameRect {
+    self = [super initWithFrame:frameRect];
+    if (self) {
+        // Force layer-backed view BEFORE creating Metal layer
+        [self setWantsLayer:YES];
+        
+        // Create and configure Metal layer
+        self.metalLayer = [CAMetalLayer layer];
+        self.metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+        self.metalLayer.framebufferOnly = YES;  // Optimization for render targets
+        self.metalLayer.frame = self.bounds;
+        
+        // Set as the view's layer
+        [self setLayer:self.metalLayer];
+        
+        // Configure for updates
+        self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
+        
+        KDEBUG("KohiContentView initialized with CAMetalLayer: %p", self.metalLayer);
+    }
+    return self;
+}
 
 - (BOOL)acceptsFirstResponder {
     return YES;
@@ -52,14 +80,53 @@ keys translate_keycode(unsigned short keycode);
 }
 
 // Enable layer-backed view for Metal
-- (BOOL)wantsLayer {
+// This should return NO now that we're setting layer explicitly
+- (BOOL)wantsUpdateLayer {
     return YES;
+}
+
+- (void)updateLayer {
+    // Keep layer bounds in sync
+    if (self.metalLayer) {
+        self.metalLayer.frame = self.bounds;
+    }
 }
 
 - (CALayer*)makeBackingLayer {
     CAMetalLayer* layer = [CAMetalLayer layer];
     layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
     return layer;
+}
+
+- (void)viewDidChangeBackingProperties {
+    [super viewDidChangeBackingProperties];
+    // Update for retina displays
+    NSScreen* screen = self.window.screen ?: [NSScreen mainScreen];
+    CGFloat scale = screen.backingScaleFactor;
+    if (self.metalLayer) {
+        self.metalLayer.contentsScale = scale; 
+        // Update drawable size
+        CGSize drawableSize = self.bounds.size;
+        drawableSize.width *= scale;
+        drawableSize.height *= scale;
+        self.metalLayer.drawableSize = drawableSize;
+        KDEBUG("Metal layer updated for scale %.1f, drawable size: %.0fx%.0f", 
+               scale, drawableSize.width, drawableSize.height);
+    }
+}
+
+-  (void)setFrameSize:(NSSize)newSize {
+    [super setFrameSize:newSize];
+    
+    if (self.metalLayer) {
+        self.metalLayer.frame = self.bounds;
+        // Update drawable size with scale
+        CGFloat scale = self.metalLayer.contentsScale;
+        self.metalLayer.drawableSize = CGSizeMake(
+            self.bounds.size.width * scale,
+            self.bounds.size.height * scale
+        );
+    }
 }
 
 - (void)keyDown:(NSEvent*)event {
@@ -198,8 +265,12 @@ typedef struct internal_state {
     // Timing
     mach_timebase_info_data_t timebase_info;
     u64 start_time;
+    
+    // Vulkan surface
+    VkSurfaceKHR surface; 
 } internal_state;
 
+// In platform_startup:
 b8 platform_startup(
     platform_state* plat_state,
     const char* application_name,
@@ -209,18 +280,16 @@ b8 platform_startup(
     i32 height) {
     
     @autoreleasepool {
-        // Create internal state
         plat_state->internal_state = malloc(sizeof(internal_state));
         internal_state* state = (internal_state*)plat_state->internal_state;
         memset(state, 0, sizeof(internal_state));
         
         state->quit_flagged = FALSE;
         
-        // Initialize NSApplication if not already initialized
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
         
-        // Create menu bar for proper macOS app behavior
+        // Create menu bar
         NSMenu* menubar = [[NSMenu alloc] init];
         NSMenuItem* appMenuItem = [[NSMenuItem alloc] init];
         [menubar addItem:appMenuItem];
@@ -235,16 +304,13 @@ b8 platform_startup(
         [appMenu addItem:quitMenuItem];
         [appMenuItem setSubmenu:appMenu];
         
-        // Create window style mask
         NSWindowStyleMask style_mask = NSWindowStyleMaskTitled |
                                        NSWindowStyleMaskClosable |
                                        NSWindowStyleMaskMiniaturizable |
                                        NSWindowStyleMaskResizable;
         
-        // Create window rect
         NSRect window_rect = NSMakeRect(x, y, width, height);
         
-        // Create window
         state->window = [[NSWindow alloc] initWithContentRect:window_rect
                                                      styleMask:style_mask
                                                        backing:NSBackingStoreBuffered
@@ -255,36 +321,59 @@ b8 platform_startup(
             return FALSE;
         }
         
-        // Set window title
         [state->window setTitle:appName];
         
-        // Create and set window delegate
         state->window_delegate = [[KohiWindowDelegate alloc] init];
         state->window_delegate.quit_flagged = &state->quit_flagged;
         [state->window setDelegate:state->window_delegate];
         
         // Create content view
         state->content_view = [[KohiContentView alloc] initWithFrame:window_rect];
+        
+        // CRITICAL: Set content view BEFORE making window visible
         [state->window setContentView:state->content_view];
         
-        // Get Metal layer for rendering
-        state->metal_layer = (CAMetalLayer*)[state->content_view layer];
+        // Store Metal layer reference
+        state->metal_layer = state->content_view.metalLayer;
         
-        // Configure window
+        if (!state->metal_layer) {
+            KFATAL("Failed to create Metal layer");
+            return FALSE;
+        }
+        
+        // Configure Metal layer BEFORE showing window
+        NSScreen* screen = [NSScreen mainScreen];
+        CGFloat scale = screen.backingScaleFactor;
+        state->metal_layer.contentsScale = scale;
+        state->metal_layer.drawableSize = CGSizeMake(width * scale, height * scale);
+        
+        KINFO("Metal layer configured: %p, scale: %.1f", state->metal_layer, scale);
+        
+        // NOW show the window
         [state->window makeKeyAndOrderFront:nil];
         [state->window setAcceptsMouseMovedEvents:YES];
         [state->window makeFirstResponder:state->content_view];
         [NSApp activateIgnoringOtherApps:YES];
         
-        // Setup high-precision timing
+        // Force window to display and process any pending events
+        [state->window display];
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.001]];
+        
+        // Verify layer is in window's layer hierarchy
+        if (state->content_view.layer != state->metal_layer) {
+            KFATAL("Metal layer not properly attached to view");
+            return FALSE;
+        }
+        
         mach_timebase_info(&state->timebase_info);
         state->start_time = mach_absolute_time();
         
         KINFO("macOS platform initialized: %dx%d at (%d, %d)", width, height, x, y);
+        KINFO("CAMetalLayer ready for Vulkan surface creation");
+        
         return TRUE;
     }
 }
-
 void platform_shutdown(platform_state* plat_state) {
     @autoreleasepool {
         internal_state* state = (internal_state*)plat_state->internal_state;
@@ -384,10 +473,90 @@ void platform_sleep(u64 ms) {
 }
 
 void platform_get_required_extension_names(const char ***names__darray) {
-    // For macOS platform, we need to add the VK_MVK_macos_surface extension.
-    darray_push(*names__darray, &VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
+    // For macOS platform, we need to add the VK_EXT_METAL_SURFACE extension.
+    darray_push(*names__darray, &VK_EXT_METAL_SURFACE_EXTENSION_NAME);
 }
 
+
+// Fixed surface creation with detailed validation
+b8 platform_create_vulkan_surface(
+    platform_state* plat_state,
+    vulkan_context* context) {
+    @autoreleasepool {
+        internal_state* state = (internal_state*)plat_state->internal_state;
+        // Extensive validation
+        if (!state) {
+            KERROR("Internal state is NULL");
+            return FALSE;
+        }
+        
+        if (!state->metal_layer) {
+            KERROR("Metal layer is NULL");
+            return FALSE;
+        }
+        
+        // Verify it's the right type
+        if (![state->metal_layer isKindOfClass:[CAMetalLayer class]]) {
+            KERROR("Layer is not CAMetalLayer, it's: %s", 
+                   [[state->metal_layer className] UTF8String]);
+            return FALSE;
+        }
+        
+        // Verify layer is in the view hierarchy
+        if (!state->metal_layer.superlayer && state->metal_layer != state->content_view.layer) {
+            KWARN("Metal layer might not be properly attached to view hierarchy");
+        }
+        
+        KINFO("Creating Vulkan Metal surface...");
+        KDEBUG("  Metal layer: %p", state->metal_layer);
+        KDEBUG("  Layer bounds: %.0fx%.0f", 
+               state->metal_layer.bounds.size.width,
+               state->metal_layer.bounds.size.height);
+        KDEBUG("  Drawable size: %.0fx%.0f",
+               state->metal_layer.drawableSize.width,
+               state->metal_layer.drawableSize.height);
+        
+        VkMetalSurfaceCreateInfoEXT create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+        create_info.pNext = NULL;
+        create_info.flags = 0;
+        // Use CFBridgingRetain for proper ARC handling
+        create_info.pLayer = (__bridge void*)state->metal_layer;
+        
+        VkResult result = vkCreateMetalSurfaceEXT(
+            context->instance,
+            &create_info,
+            context->allocator,
+            &context->surface);
+        
+        if (result != VK_SUCCESS) {
+            KERROR("vkCreateMetalSurfaceEXT failed with result: %d", result);
+            // Provide specific error diagnostics
+            switch (result) {
+                case VK_ERROR_SURFACE_LOST_KHR:
+                    KERROR("  Surface lost - layer may not be properly configured");
+                    KERROR("  Layer class: %s", [[state->metal_layer className] UTF8String]);
+                    KERROR("  Layer in window: %d", state->metal_layer.superlayer != nil);
+                    break;
+                case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:
+                    KERROR("  Native window already in use");
+                    break;
+                case VK_ERROR_OUT_OF_HOST_MEMORY:
+                    KERROR("  Out of host memory");
+                    break;
+                default:
+                    KERROR("  Unknown error code");
+                    break;
+            }
+            return FALSE;
+        }
+        
+        KINFO("Vulkan Metal surface created successfully (handle: %p)", context->surface);
+        return TRUE;
+    }
+}
+
+ 
 // Key translation from macOS keycodes
 keys translate_keycode(unsigned short keycode) {
     switch (keycode) {
