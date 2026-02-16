@@ -1,9 +1,6 @@
 #pragma once
 
-#include "defines.h"
-#include <vulkan/vulkan.h>
-#include "renderer/vulkan/vulkan_types.inl"
-#include "core/kmemory.h"
+#include "vulkan_types.inl"
 
 void vulkan_swapchain_create(
     vulkan_context* context,
@@ -13,15 +10,15 @@ void vulkan_swapchain_create(
 
 void vulkan_swapchain_recreate(
     vulkan_context* context,
-    vulkan_swapchain* swapchain,
     u32 width,
-    u32 height);
+    u32 height,
+    vulkan_swapchain* swapchain);
 
 void vulkan_swapchain_destroy(
     vulkan_context* context,
     vulkan_swapchain* swapchain);
 
-b8 vulkan_swapchain_acquire_next_image(
+b8 vulkan_swapchain_acquire_next_image_index(
     vulkan_context* context,
     vulkan_swapchain* swapchain,
     u64 timeout_ns,
@@ -32,8 +29,7 @@ b8 vulkan_swapchain_acquire_next_image(
 void vulkan_swapchain_present(
     vulkan_context* context,
     vulkan_swapchain* swapchain,
-    VkQueue present_queue,
     VkQueue graphics_queue,
-    u32 present_image_index,
-    VkSemaphore render_complete_semaphore);
-
+    VkQueue present_queue,
+    VkSemaphore render_complete_semaphore,
+    u32 present_image_index);

@@ -300,6 +300,29 @@ void vulkan_device_query_swapchain_support(
            out_support_info->present_mode_count);
 }
 
+b8 vulkan_device_detect_depth_format(
+    vulkan_device* device) {
+    VkFormat candidates[] = {
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_D32_SFLOAT_S8_UINT,
+        VK_FORMAT_D24_UNORM_S8_UINT
+    };
+
+    for (u32 i = 0; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(device->physical_device, candidates[i], &props);
+
+        if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+            device->depth_format = candidates[i];
+            KINFO("Selected depth format: %d", device->depth_format);
+            return TRUE;
+        }
+    }
+
+    KFATAL("Failed to find a supported depth format.");
+    return FALSE;
+}
+
 void vulkan_device_destroy(vulkan_context* context) {
     // Unset queues
     context->device.graphics_queue = 0;
@@ -404,7 +427,7 @@ b8 select_physical_device(vulkan_context* context) {
                     KINFO("GPU type is Integrated.");
                     break;
                 case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-                    KINFO("GPU type is Discrete.");  // Fixed typo: "Descrete" -> "Discrete"
+                    KINFO("GPU type is Discrete."); 
                     break;
                 case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
                     KINFO("GPU type is Virtual.");
@@ -635,7 +658,7 @@ b8 physical_device_meets_requirements(
         for (u32 i = 0; i < required_extension_count; ++i) {
             b8 found = FALSE;
             const char* required_ext = requirements->device_extension_names[i];
-
+ 
             for (u32 j = 0; j < available_extension_count; ++j) {
                 if (strings_equal(required_ext, available_extensions[j].extensionName)) {
                     found = TRUE;

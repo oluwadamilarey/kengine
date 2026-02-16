@@ -181,7 +181,7 @@ void platform_console_write_error(const char* message, u8 colour) {
     WriteConsoleA(GetStdHandle(STD_ERROR_HANDLE), message, (DWORD)length, number_written, 0);
 }
 
-f64 platform_get_absolute_time() {
+f64 platform_get_absolute_time(platform_state* plat_state) {
     LARGE_INTEGER now_time;
     QueryPerformanceCounter(&now_time);
     return (f64)now_time.QuadPart * clock_frequency;

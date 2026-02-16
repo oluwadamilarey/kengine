@@ -16,7 +16,7 @@
 #include "containers/darray.h"
 // // For surface creation - MoltenVK on macOS
 // #define VK_USE_PLATFORM_METAL_EXT  // Define BEFORE including Vulkan headers
-#include <vulkan/vulkan.h>
+#include <vulkan/vulkan.h> 
 #include "renderer/vulkan/vulkan_types.inl"
 
 // Forward declarations
@@ -28,17 +28,17 @@ keys translate_keycode(unsigned short keycode);
 @end
 
 @implementation KohiWindowDelegate
-- (BOOL)windowShouldClose:(NSWindow*)sender {
-    KINFO("Window close requested");
-    *self.quit_flagged = TRUE;
-    return YES;
-}
+    - (BOOL)windowShouldClose:(NSWindow*)sender {
+        KINFO("Window close requested");
+        *self.quit_flagged = TRUE;
+        return YES;
+    }
 
-- (void)windowDidResize:(NSNotification*)notification {
-    NSWindow* window = notification.object;
-    NSRect frame = [window contentRectForFrameRect:[window frame]];
-    KDEBUG("Window resized: %dx%d", (i32)frame.size.width, (i32)frame.size.height);
-}
+    - (void)windowDidResize:(NSNotification*)notification {
+        NSWindow* window = notification.object;
+        NSRect frame = [window contentRectForFrameRect:[window frame]];
+        KDEBUG("Window resized: %dx%d", (i32)frame.size.width, (i32)frame.size.height);
+    }
 @end 
 
 // Custom NSView to handle input events and Metal rendering
@@ -260,8 +260,7 @@ typedef struct internal_state {
     KohiWindowDelegate* window_delegate;
     CAMetalLayer* metal_layer;
     
-    b8 quit_flagged;
-    
+    b8 quit_flagged; 
     // Timing
     mach_timebase_info_data_t timebase_info;
     u64 start_time;
