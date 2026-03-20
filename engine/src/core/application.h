@@ -1,6 +1,7 @@
 #pragma once
 
 #include "defines.h"
+#include "core/event.h"
 
 struct game;
 
@@ -22,7 +23,9 @@ typedef struct application_config {
     char* name;
 } application_config;
 
-
 KAPI b8 application_create(struct game* game_inst);
 
 KAPI b8 application_run();
+void application_get_framebuffer_size(u32* width, u32* height);
+b8 application_on_event(u16 code, void* sender, void* listener_inst, event_context context);
+b8 application_on_key(u16 code, void* sender, void* listener_inst, event_context context);

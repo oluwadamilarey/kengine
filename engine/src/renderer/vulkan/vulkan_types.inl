@@ -24,6 +24,11 @@ typedef struct vulkan_image {
     u32 height;
 } vulkan_image;
 
+typedef struct vulkan_fence {
+    VkFence handle;
+    b8 is_signaled;
+} vulkan_fence;
+
 typedef enum vulkan_renderpass_state {
     READY,
     RECORDING,
@@ -45,6 +50,13 @@ typedef struct vulkan_renderpass {
     vulkan_renderpass_state state;
 } vulkan_renderpass;
 
+typedef struct vulkan_framebuffer {
+    VkFramebuffer handle;
+    u32 attachment_count;
+    VkImageView* attachments;
+    vulkan_renderpass* renderpass;
+} vulkan_framebuffer;
+
 typedef struct vulkan_swapchain {
     VkSurfaceFormatKHR image_format;
     u8 max_frames_in_flight;
@@ -55,6 +67,8 @@ typedef struct vulkan_swapchain {
     VkImage* images;
     VkImageView* views;  // darray
     vulkan_image depth_attachment;
+    // framebuffers used for on-screen rendering, one for each swapchain image.
+    vulkan_framebuffer* framebuffers;  // darray
 } vulkan_swapchain;
 
 typedef enum vulkan_command_buffer_state {
@@ -68,7 +82,6 @@ typedef enum vulkan_command_buffer_state {
 
 typedef struct vulkan_command_buffer {
     VkCommandBuffer handle;
-
     // The current state of the command buffer.
     vulkan_command_buffer_state state;
 } vulkan_command_buffer;
@@ -109,6 +122,11 @@ typedef struct vulkan_context {
     u32 framebuffer_width;
     // The framebuffer's current height.
     u32 framebuffer_height;
+    // generation counter for framebuffer size changes, used to detect when the swapchain needs to be recreated.
+    u64 framebuffer_size_generation;
+
+    // The framebuffer size generation at the last swapchain creation, used to detect when the swapchain needs to be recreated.
+    u64 framebuffer_size_last_generation;
     VkInstance instance;
     VkAllocationCallbacks* allocator;
     VkSurfaceKHR surface;
@@ -121,10 +139,17 @@ typedef struct vulkan_context {
 
     // darray of command buffers, one for each frame in flight.
     vulkan_command_buffer* graphics_command_buffers;
-
+    // darray
+    VkSemaphore* image_available_semaphores;
+    // darray
+    VkSemaphore* queue_complete_semaphores;
+    u32 in_flight_fence_count;
+    vulkan_fence* in_flight_fences;
+    vulkan_fence** images_in_flight;
+    // darray
+    // VkFence* in_flight_fences;
     u32 image_index;
     u32 current_frame;
     b8 recreating_swapchain;
-
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
 } vulkan_context;

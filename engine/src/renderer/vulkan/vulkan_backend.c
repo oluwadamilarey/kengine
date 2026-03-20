@@ -6,9 +6,13 @@
 #include "vulkan_renderpass.h"
 #include "vulkan_command_buffer.h"
 #include "vulkan_image.h"
+#include "vulkan_framebuffer.h"
+#include "vulkan_fence.h"
 
+#include "core/application.h"
 #include "core/logger.h"
 #include "core/kstring.h"
+#include "core/kmemory.h"
 
 #include "containers/darray.h"
 #include "platform/platform.h"
@@ -17,6 +21,8 @@
 
 // static Vulkan context
 static vulkan_context context;
+static u32 cached_framebuffer_width = 0;
+static u32 cached_framebuffer_height = 0;
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
@@ -27,6 +33,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
 i32 find_memory_index(u32 type_filter, u32 property_flags);
 
 void create_command_buffers(renderer_backend* backend);
+void regenerate_framebuffers(renderer_backend* backend, vulkan_swapchain* swapchain, vulkan_renderpass* renderpass);
 
 /**
  * @brief Initializes the Vulkan renderer backend.
@@ -53,16 +60,18 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
      * The vulkan_context is a static global that holds all Vulkan state.
      * We start by setting up utility function pointers and the allocator.
      */
-
     // Store a function pointer for finding suitable memory types during buffer/image allocation.
     // This is used throughout the renderer when allocating GPU memory (e.g., vertex buffers, textures).
     context.find_memory_index = find_memory_index;
-
     // TODO: Implement a custom Vulkan memory allocator for better memory management.
     // Using NULL (0) tells Vulkan to use its internal default allocator.
     // A custom allocator would give us more control over memory allocation patterns.
     context.allocator = 0;
-
+    application_get_framebuffer_size(&cached_framebuffer_width, &cached_framebuffer_height);
+    context.framebuffer_width = (cached_framebuffer_width != 0) ? cached_framebuffer_width : 800;  // Avoid zero dimensions
+    context.framebuffer_height = (cached_framebuffer_height != 0) ? cached_framebuffer_height : 600;
+    cached_framebuffer_width = 0;
+    cached_framebuffer_height = 0;
     /*
      * ========================================================================
      * VULKAN INSTANCE CREATION
@@ -70,20 +79,17 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
      * The VkInstance is the connection between our application and the Vulkan library.
      * It holds per-application state and allows us to enumerate physical devices.
      */
-
     // VkApplicationInfo provides information about our application to the Vulkan driver.
     // Some drivers may use this info for optimizations specific to well-known engines.
     VkApplicationInfo app_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};  // sType must be set for all Vulkan structs
-    app_info.apiVersion = VK_API_VERSION_1_2;       // Request Vulkan 1.2 API (provides modern features like timeline semaphores)
-    app_info.pApplicationName = application_name;   // Application name (visible in GPU profiling tools)
-    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);  // Application version (major.minor.patch)
-    app_info.pEngineName = "Kohi Engine";           // Engine name (also visible in profiling tools)
-    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);  // Engine version
-
+    app_info.apiVersion = VK_API_VERSION_1_2;                           // Request Vulkan 1.2 API (provides modern features like timeline semaphores)
+    app_info.pApplicationName = application_name;                       // Application name (visible in GPU profiling tools)
+    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);             // Application version (major.minor.patch)
+    app_info.pEngineName = "Kohi Engine";                               // Engine name (also visible in profiling tools)
+    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);                  // Engine version
     // VkInstanceCreateInfo describes how to create the VkInstance.
     VkInstanceCreateInfo create_info = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     create_info.pApplicationInfo = &app_info;
-
     /*
      * ------------------------------------------------------------------------
      * INSTANCE EXTENSIONS
@@ -91,15 +97,12 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
      * Extensions provide functionality beyond the core Vulkan specification.
      * We need platform-specific extensions for window surface creation.
      */
-
     // Create a dynamic array to hold required extension names.
     // Using darray allows us to build the list dynamically based on platform/debug settings.
     const char** required_extensions = darray_create(const char*);
-
     // VK_KHR_surface: Core extension for presenting rendered images to a window.
     // This is required on ALL platforms that want to display graphics.
     darray_push(required_extensions, &VK_KHR_SURFACE_EXTENSION_NAME);
-
     /*
      * Platform-specific surface extensions:
      * Each platform has its own way of creating window surfaces.
@@ -138,13 +141,11 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     // Allow the platform layer to add any additional required extensions.
     // This provides flexibility for platform-specific requirements we might not know about here.
     platform_get_required_extension_names(&required_extensions);
-
     // Finalize extension configuration for instance creation.
     u32 extension_count = (u32)darray_length(required_extensions);
     const char** extensions = required_extensions;
     create_info.enabledExtensionCount = extension_count;
     create_info.ppEnabledExtensionNames = (const char* const*)extensions;
-
     /*
      * ------------------------------------------------------------------------
      * VALIDATION LAYERS (Debug builds only)
@@ -152,35 +153,27 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
      * Validation layers intercept Vulkan calls and check for incorrect usage.
      * They're essential during development but have performance overhead.
      */
-
     const char** required_validation_layer_names = 0;
     u32 required_validation_layer_count = 0;
-
 #if defined(_DEBUG)
     KINFO("Validation layers enabled. Enumerating...");
-
     // Create a list of validation layers we want to enable.
     required_validation_layer_names = darray_create(const char*);
-
     // VK_LAYER_KHRONOS_validation: The standard, all-in-one validation layer.
     // It combines all individual validation checks (parameter, object lifetime, threading, etc.)
     const char* khronos_validation = "VK_LAYER_KHRONOS_validation";
     darray_push(required_validation_layer_names, khronos_validation);
     required_validation_layer_count = darray_length(required_validation_layer_names);
-
     /*
      * We must verify that requested validation layers are actually available.
      * Not all systems have the Vulkan SDK installed with validation layers.
      */
-
     // First call: Get the count of available layers (pass NULL for the array).
     u32 available_layer_count = 0;
     VK_CHECK(vkEnumerateInstanceLayerProperties(&available_layer_count, 0));
-
     // Second call: Retrieve the actual layer properties.
     VkLayerProperties* available_layers = darray_reserve(VkLayerProperties, available_layer_count);
     VK_CHECK(vkEnumerateInstanceLayerProperties(&available_layer_count, available_layers));
-
     // Check each required layer against the list of available layers.
     // If any required layer is missing, we cannot proceed (validation is mandatory in debug).
     for (u32 i = 0; i < required_validation_layer_count; ++i) {
@@ -202,18 +195,15 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     }
     KINFO("All required validation layers are present.");
 #endif
-
     // Configure validation layers in the instance create info.
     // In release builds, these will be 0/NULL (no validation overhead).
     create_info.enabledLayerCount = required_validation_layer_count;
     create_info.ppEnabledLayerNames = (const char* const*)required_validation_layer_names;
-
 #if defined(KPLATFORM_APPLE)
     // Required flag for MoltenVK: Allows enumeration of "non-conformant" Vulkan implementations.
     // MoltenVK doesn't fully implement Vulkan (it translates to Metal), so this flag is needed.
     create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #endif
-
     /*
      * Create the VkInstance!
      * This is the first major Vulkan object we create.
@@ -236,8 +226,7 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     u32 log_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |    // API misuse, crashes
                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |  // Potential issues
                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;      // Informational
-                       // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT; // Diagnostic spam
-
+                                                                          // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT; // Diagnostic spam
     VkDebugUtilsMessengerCreateInfoEXT debug_create_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
     debug_create_info.messageSeverity = log_severity;
 
@@ -278,7 +267,6 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
         KFATAL("Failed to create Vulkan surface.");
         return FALSE;
     }
-
     /*
      * ========================================================================
      * LOGICAL DEVICE CREATION
@@ -293,7 +281,6 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
         KFATAL("Failed to create Vulkan device.");
         return FALSE;
     }
-
     /*
      * ========================================================================
      * SWAPCHAIN CREATION
@@ -303,7 +290,6 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
      * Parameters: context, width, height, output swapchain.
      */
     vulkan_swapchain_create(&context, context.framebuffer_width, context.framebuffer_height, &context.swapchain);
-
     /*
      * ========================================================================
      * RENDERPASS CREATION
@@ -325,8 +311,10 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     vulkan_renderpass_create(&context, &context.main_renderpass, 0.0f, 0.0f,
                              (f32)context.framebuffer_width, (f32)context.framebuffer_height,
                              0.0f, 0.0f, 0.0f, 1.0f,  // Clear to opaque black
-                             1.0f, 0);                 // Depth=1.0, stencil=0
-
+                             1.0f, 0);                // Depth=1.0, stencil=0
+    // swapchain framebuffer
+    context.swapchain.framebuffers = darray_reserve(vulkan_framebuffer, context.swapchain.image_count);
+    regenerate_framebuffers(backend, &context.swapchain, &context.main_renderpass);
     /*
      * ========================================================================
      * COMMAND BUFFER CREATION
@@ -337,14 +325,79 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
      */
     create_command_buffers(backend);
 
+    // create sync objects
+    context.image_available_semaphores = darray_reserve(VkSemaphore, context.swapchain.max_frames_in_flight);
+    context.queue_complete_semaphores = darray_reserve(VkSemaphore, context.swapchain.max_frames_in_flight);
+    context.in_flight_fences = darray_reserve(vulkan_fence, context.swapchain.max_frames_in_flight);
+
+    for (u32 i = 0; i < context.swapchain.max_frames_in_flight; ++i) {
+        VkSemaphoreCreateInfo semaphore_create_info = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        vkCreateSemaphore(context.device.logical_device, &semaphore_create_info, context.allocator, &context.image_available_semaphores[i]);
+        vkCreateSemaphore(context.device.logical_device, &semaphore_create_info, context.allocator, &context.queue_complete_semaphores[i]);
+
+        // create the fence in a signaled state, indicating that the first frame has already been rendered
+        //  this will prevent the application from wating indefintely for the first frame to render since it
+        //  cannot be rendered until a frame is "rendered" before it
+        vulkan_fence_create(&context, TRUE, &context.in_flight_fences[i]);
+    }
+
+    // in-flight fences should not yet exist at this point, so clear the list. these are stored in pointers
+    // beacause the initial state should be 0, and will be 0 when not in use, Actual fences are not owned
+    // by this list.
+    context.images_in_flight = darray_reserve(vulkan_fence, context.swapchain.image_count);
+    for (u32 i = 0; i < context.swapchain.image_count; ++i) {
+        context.images_in_flight[i] = 0;
+    }
     KINFO("Vulkan renderer initialized successfully.");
     return TRUE;
 }
 
 void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
+    vkDeviceWaitIdle(context.device.logical_device);
+    // destroy in the opposite order of creation
+
+    // sync objects
+    for (u8 i = 0; i < context.swapchain.max_frames_in_flight; ++i) {
+        if (context.image_available_semaphores[i]) {
+            vkDestroySemaphore(
+                context.device.logical_device,
+                context.image_available_semaphores[i],
+                context.allocator);
+            context.image_available_semaphores[i] = 0;
+        }
+    }
+    darray_destroy(context.image_available_semaphores);
+    context.image_available_semaphores = 0;
+
+    darray_destroy(context.queue_complete_semaphores);
+    context.queue_complete_semaphores = 0;
+
+    darray_destroy(context.in_flight_fences);
+    context.in_flight_fences = 0;
+
+    _darray_destroy(context.images_in_flight);
+    context.images_in_flight = 0;
+
+    // command buffers
+    for (u32 i = 0; i < context.swapchain.image_count; ++i) {
+        if (context.graphics_command_buffers[i].handle) {
+            vulkan_command_buffer_free(
+                &context,
+                context.device.graphics_command_pool,
+                &context.graphics_command_buffers[i]);
+            context.graphics_command_buffers[i].handle = 0;
+        }
+        vulkan_fence_destroy(&context, &context.in_flight_fences[i]);
+    }
+    darray_destroy(context.graphics_command_buffers);
+    context.graphics_command_buffers = 0;
+    // destroy framebuffers
+    for (u32 i = 0; i < context.swapchain.image_count; ++i) {
+        vulkan_framebuffer_destroy(&context, &context.swapchain.framebuffers[i]);
+    }
+
     // renderpass destroy
     vulkan_renderpass_destroy(&context, &context.main_renderpass);
-    // destroy in the opposite order of creation
     vulkan_swapchain_destroy(&context, &context.swapchain);
     vulkan_device_destroy(&context);
     if (context.surface) {
@@ -362,13 +415,72 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
     KDEBUG("Vulkan instance destroyed.");
     KDEBUG("Vulkan renderer backend shut down.");
 }
+
 void vulkan_renderer_backend_on_resized(renderer_backend* backend, u16 width, u16 height) {
+    // update the framebuffer size generation, a counter which indicates that the
+    // framebuffer size had been updated. this is used to trigger swapchain recreation
+    // in the main loop, and is used to detect when the swapchain needs to be recreated.
     context.framebuffer_width = width;
     context.framebuffer_height = height;
     context.recreating_swapchain = TRUE;
+    context.framebuffer_size_generation++;
+    KINFO("Vulkan renderer backend detected framebuffer resize: %ux%u (generation %u)", width, height, context.framebuffer_size_generation);
 }
 
 b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time) {
+    vulkan_device* device = &context.device;
+    // check if recreating swapchain and boot out
+    if (context.recreating_swapchain) {
+        // KINFO("Vulkan renderer backend is currently recreating the swapchain, skipping frame.");
+        VkResult result = vkDeviceWaitIdle(device->logical_device);
+        if (!vulkan_result_is_success(result)) {
+            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle failed with error code %d", result);
+            return FALSE;
+        }
+        KINFO("Recreating swapchain, booting.");
+        return FALSE;
+    }
+    // check if framebuffer size has changed since last frame, and if so, trigger swapchain recreation and boot out of the frame.
+    // if (context.framebuffer_width != cached_framebuffer_width || context.framebuffer_height != cached_framebuffer_height) {
+    //     KINFO("Framebuffer size change detected. Old: %ux%u, New: %ux%u. Triggering swapchain recreation.", cached_framebuffer_width, cached_framebuffer_height, context.framebuffer_width, context.framebuffer_height);
+    //     context.framebuffer_size_generation++;
+    //     cached_framebuffer_width = context.framebuffer_width;
+    //     cached_framebuffer_height = context.framebuffer_height;
+    //     return FALSE;
+    // }
+    if (context.framebuffer_size_generation != context.framebuffer_size_last_generation) {
+        VkResult result = vkDeviceWaitIdle(device->logical_device);
+        if (!vulkan_result_is_success(result)) {
+            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle failed with error code %d", result);
+            return FALSE;
+        }
+        // if the swapchain recreation failed (beacause, for exaple, the window was minimized
+        // and the framebuffer size became 0), then we should not attempt to recreate the
+        // swapchain until the framebuffer size becomes valid again. we can detect
+        // this by checking if the framebuffer size is 0, and if so,
+        // we will skip recreating the swapchain and wait for the next frame to check again.
+        if (!recreate_swapchain(backend)) {
+            KINFO("Swapchain recreation failed, likely due to invalid framebuffer size. Will retry on next frame.");
+            return FALSE;
+        }
+    }
+    // check if the framebuffer has been resized since the last swapchain recreation, and if so, recreate the swapchain.
+    // this is a secondary check to detect framebuffer size changes that may have been missed by the resize callback, which can happen on some platforms.
+    if (context.framebuffer_size_generation != context.framebuffer_size_last_generation) {
+        VkResult result = vkDeviceWaitIdle(device->logical_device);
+        if (!vulkan_result_is_success(result)) {
+            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle failed with error code %d", result);
+            return FALSE;
+        }
+        KINFO("Swapchain recreated successfully.");
+
+        // if the swapchain recreation failed(because, for example the window was minimized),
+        // boot out before unsetting the flag
+        if (!recreate_swapchain(backend)) {
+            KINFO("Swapchain recreation failed, likely due to invalid framebuffer size. Will retry on next frame.");
+            return FALSE;
+        }
+    }
     return TRUE;
 }
 
@@ -459,8 +571,35 @@ void create_command_buffers(renderer_backend* backend) {
         if (context.graphics_command_buffers[i].handle) {
             vulkan_command_buffer_free(&context, context.device.graphics_command_pool, &context.graphics_command_buffers[i]);
         }
-        // 
+        //
         kzero_memory(&context.graphics_command_buffers[i], sizeof(vulkan_command_buffer));
         vulkan_command_buffer_allocate(&context, context.device.graphics_command_pool, TRUE, &context.graphics_command_buffers[i]);
+    }
+}
+
+void regenerate_framebuffers(renderer_backend* backend, vulkan_swapchain* swapchain, vulkan_renderpass* renderpass) {
+    // // Free existing framebuffers if they exist
+    // if (swapchain->framebuffers) {
+    //     for (u32 i = 0; i < swapchain->image_count; ++i) {
+    //         vulkan_framebuffer_destroy(&context, &swapchain->framebuffers[i]);
+    //     }
+    //     kfree(swapchain->framebuffers, sizeof(vulkan_framebuffer) * swapchain->image_count, MEMORY_TAG_RENDERER);
+    //     swapchain->framebuffers = 0;
+    // }
+    for (u32 i = 0; i < swapchain->image_count; ++i) {
+        // TODO: make this dynamic based on the currently configured attachments
+        u32 attachment_count = 2;
+        VkImageView attachments[] = {
+            swapchain->views[i],
+            swapchain->depth_attachment.view};
+
+        vulkan_framebuffer_create(
+            &context,
+            renderpass,
+            context.framebuffer_width,
+            context.framebuffer_height,
+            attachment_count,
+            attachments,
+            &context.swapchain.framebuffers[i]); 
     }
 }

@@ -136,7 +136,7 @@ b8 application_run() {
                 b8 limit_frames = FALSE;
                 if (remaining_ms > 0 && limit_frames) {
                     platform_sleep(remaining_ms - 1);
-                } 
+                }
 
                 frame_count++;
             }
@@ -152,9 +152,70 @@ b8 application_run() {
     }
 
     app_state.is_running = FALSE;
+
+    // Shutdown event system.
+    event_unregister(EVENT_CODE_APPLICATION_QUIT, 0, application_on_event);
+    event_unregister(EVENT_CODE_KEY_PRESSED, 0, application_on_key);
+    event_unregister(EVENT_CODE_KEY_RELEASED, 0, application_on_key);
     event_shutdown();
     input_shutdown();
+    renderer_shutdown();
     platform_shutdown(&app_state.platform);
 
     return TRUE;
 }
+
+void application_get_framebuffer_size(u32* width, u32* height) {
+    *width = app_state.width;
+    *height = app_state.height;
+}
+
+b8 application_on_event(u16 code, void* sender, void* listener_inst, event_context context) {
+    switch (code) {
+        case EVENT_CODE_APPLICATION_QUIT: {
+            app_state.is_running = FALSE;
+            KINFO("EVENT_CODE_APPLICATION_QUIT recieved, shutting down.\n");
+            return TRUE;
+        }
+        // case EVENT_CODE_APPLICATION_SUSPENDED: {
+        //     app_state.is_suspended = TRUE;
+        //     return TRUE;
+        // }
+        // case EVENT_CODE_APPLICATION_RESUMED: {
+        //     app_state.is_suspended = FALSE; 
+        //     return TRUE;
+        // }
+        default: {
+            return FALSE;
+        }
+    }
+}
+
+b8 application_on_key(u16 code, void* sender, void* listener_inst, event_context context) {
+    if (code == EVENT_CODE_KEY_PRESSED) {
+        u16 key_code = context.data.u16[0];
+        if (key_code == KEY_ESCAPE) {
+            // NOTE: Technically firing an event to itself, but there may be other listeners.
+            event_context data = {};
+            event_fire(EVENT_CODE_APPLICATION_QUIT, 0, data);
+
+            // Block anything else from processing this.
+            return TRUE;
+        } else if (key_code == KEY_A) {
+            // Example on checking for a key
+            KDEBUG("Explicit - A key pressed!");
+        } else {
+            KDEBUG("'%c' key pressed in window.", key_code);
+        }
+    } else if (code == EVENT_CODE_KEY_RELEASED) {
+        u16 key_code = context.data.u16[0];
+        if (key_code == KEY_B) {
+            // Example on checking for a key
+            KDEBUG("Explicit - B key released!");
+        } else {
+            KDEBUG("'%c' key released in window.", key_code);
+        }
+    }
+    return FALSE;
+}
+

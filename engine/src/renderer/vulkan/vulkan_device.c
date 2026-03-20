@@ -96,7 +96,7 @@ b8 vulkan_device_create(vulkan_context* context) {
 
         // On M1, most queue families only have 1 queue available
         // Request the minimum of what we want vs what's available
-        queue_create_infos[i].queueCount = 1;  
+        queue_create_infos[i].queueCount = 1;
 
         KINFO("Queue family %d: requesting %d queue(s) (available: %d)",
               indices[i], queue_create_infos[i].queueCount, available_queue_count);
@@ -195,6 +195,18 @@ b8 vulkan_device_create(vulkan_context* context) {
         context->device.transfer_queue_index,
         0,
         &context->device.transfer_queue);
+
+    // create command pool for graphics queue
+    VkCommandPoolCreateInfo command_pool_info = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+    command_pool_info.queueFamilyIndex = context->device.graphics_queue_index;
+    command_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    VK_CHECK(vkCreateCommandPool(
+        context->device.logical_device,
+        &command_pool_info,
+        context->allocator,
+        &context->device.graphics_command_pool));
+    KINFO("Command pool created.");
 
     KINFO("Queues obtained:");
     KINFO("  Graphics queue: family %d, queue 0", context->device.graphics_queue_index);
@@ -305,8 +317,7 @@ b8 vulkan_device_detect_depth_format(
     VkFormat candidates[] = {
         VK_FORMAT_D32_SFLOAT,
         VK_FORMAT_D32_SFLOAT_S8_UINT,
-        VK_FORMAT_D24_UNORM_S8_UINT
-    };
+        VK_FORMAT_D24_UNORM_S8_UINT};
 
     for (u32 i = 0; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
         VkFormatProperties props;
@@ -427,7 +438,7 @@ b8 select_physical_device(vulkan_context* context) {
                     KINFO("GPU type is Integrated.");
                     break;
                 case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-                    KINFO("GPU type is Discrete."); 
+                    KINFO("GPU type is Discrete.");
                     break;
                 case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
                     KINFO("GPU type is Virtual.");
@@ -438,14 +449,14 @@ b8 select_physical_device(vulkan_context* context) {
             }
             KINFO(
                 "GPU Driver version: %d.%d.%d",
-                VK_VERSION_MAJOR(properties.driverVersion),
-                VK_VERSION_MINOR(properties.driverVersion),
-                VK_VERSION_PATCH(properties.driverVersion));
+                VK_API_VERSION_MAJOR(properties.driverVersion),
+                VK_API_VERSION_MINOR(properties.driverVersion),
+                VK_API_VERSION_PATCH(properties.driverVersion));
             KINFO(
                 "Vulkan API version: %d.%d.%d",
-                VK_VERSION_MAJOR(properties.apiVersion),
-                VK_VERSION_MINOR(properties.apiVersion),
-                VK_VERSION_PATCH(properties.apiVersion));
+                VK_API_VERSION_MAJOR(properties.apiVersion),
+                VK_API_VERSION_MINOR(properties.apiVersion),
+                VK_API_VERSION_PATCH(properties.apiVersion));
 
             for (u32 j = 0; j < memory.memoryHeapCount; ++j) {
                 f32 memory_size_gib = (((f32)memory.memoryHeaps[j].size) / 1024.0f / 1024.0f / 1024.0f);
@@ -658,7 +669,7 @@ b8 physical_device_meets_requirements(
         for (u32 i = 0; i < required_extension_count; ++i) {
             b8 found = FALSE;
             const char* required_ext = requirements->device_extension_names[i];
- 
+
             for (u32 j = 0; j < available_extension_count; ++j) {
                 if (strings_equal(required_ext, available_extensions[j].extensionName)) {
                     found = TRUE;

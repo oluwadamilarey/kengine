@@ -28,3 +28,14 @@ void vulkan_command_buffer_update_submitted(
 
 void vulkan_command_buffer_reset(
     vulkan_command_buffer* command_buffer);
+
+void vulkan_command_buffer_allocate_and_begin_single_use(
+    vulkan_context* context,
+    VkCommandPool command_pool,
+    b8 is_primary,
+    vulkan_command_buffer* out_command_buffer);
+
+void vulkan_command_buffer_end_and_free_single_use(
+    vulkan_context* context,
+    VkCommandPool command_pool,
+    vulkan_command_buffer* command_buffer);

@@ -1,6 +1,7 @@
 #include "vulkan_command_buffer.h"
 
 #include "core/logger.h"
+#include "core/kmemory.h"
 
 // Allocates a command buffer from the specified command pool, and initializes its state. Only valid for primary command buffers.
 void vulkan_command_buffer_allocate(
@@ -21,7 +22,7 @@ void vulkan_command_buffer_allocate(
 }
 
 // Frees the command buffer's resources and resets its state. Only valid for primary command buffers that have already been allocated.
-void command_buffer_free(
+void vulkan_command_buffer_free(
     vulkan_context* context,
     VkCommandPool pool,
     vulkan_command_buffer* command_buffer) {
@@ -33,7 +34,7 @@ void command_buffer_free(
 }
 
 // Begins recording commands to the command buffer. Only valid for primary command buffers that are in the ready state.
-void command_buffer_begin(
+void vulkan_command_buffer_begin(
     vulkan_command_buffer* command_buffer,
     b8 is_single_use,
     b8 is_render_pass_continue,
@@ -91,16 +92,14 @@ void vulkan_command_buffer_end_and_free_single_use(
     VkCommandPool command_pool,
     vulkan_command_buffer* command_buffer) {
     vulkan_command_buffer_end(command_buffer);
-    vulkan_command_buffer_free(context, command_pool, command_buffer);
 
-    // submit the command buffer to the graphics queue and wait for it to finish executing before returning. This is typically used for short-lived command buffers that perform one-off operations like copying buffers or transitioning image layouts.
     VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &command_buffer->handle;
-
     VK_CHECK(vkQueueSubmit(context->device.graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
 
-    // Wait for the command buffer to finish executing before returning, since the caller may immediately free resources that the command buffer references after this function returns.
     VK_CHECK(vkQueueWaitIdle(context->device.graphics_queue));
-}
 
+    // Safe to free now — GPU is idle, handle is still valid until here
+    vulkan_command_buffer_free(context, command_pool, command_buffer);
+}

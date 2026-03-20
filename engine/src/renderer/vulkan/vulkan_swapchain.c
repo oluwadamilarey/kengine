@@ -83,6 +83,9 @@ void vulkan_swapchain_present(
     } else if (result != VK_SUCCESS) {
         KFATAL("Failed to present swap chain image!");
     }
+
+    // increment (and loop) the index
+    context->current_frame = (context->current_frame = 1) % swapchain->max_frames_in_flight;
 }
 
 void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* swapchain) {
@@ -194,7 +197,6 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
         view_info.subresourceRange.levelCount = 1;
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = 1;
-
         VK_CHECK(vkCreateImageView(context->device.logical_device, &view_info, context->allocator, &swapchain->views[i]));
     }
 
