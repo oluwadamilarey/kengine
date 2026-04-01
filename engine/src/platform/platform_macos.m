@@ -472,7 +472,25 @@ void platform_sleep(u64 ms) {
 }
 
 void platform_get_required_extension_names(const char ***names__darray) {
-    // For macOS platform, we need to add the VK_EXT_METAL_SURFACE extension.
+    // VK_KHR_portability_enumeration is required on macOS/MoltenVK since Vulkan SDK 1.3.216.
+    //
+    // WHY IT CRASHED:
+    //   Without this extension, vkCreateInstance returns VK_ERROR_INCOMPATIBLE_DRIVER (-9).
+    //   VK_CHECK only logs the error and does not abort, so execution continued with a
+    //   broken VkInstance. vkGetInstanceProcAddr then returned NULL for
+    //   vkCreateDebugUtilsMessengerEXT (because the instance was not properly initialised),
+    //   and the subsequent KASSERT_MSG(func, ...) fired, crashing the process.
+    //
+    // THE FIX:
+    //   Two things must be present together:
+    //     1. This extension in the instance extension list (here).
+    //     2. VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR set in
+    //        VkInstanceCreateInfo.flags (see vulkan_backend.c).
+    //   MoltenVK uses a portability subset of Vulkan; the extension + flag tell the
+    //   loader to expose those physical devices instead of hiding them.
+    darray_push(*names__darray, &VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    // VK_EXT_metal_surface is the macOS-specific WSI extension used to create a
+    // VkSurfaceKHR from a CAMetalLayer (see platform_create_vulkan_surface below).
     darray_push(*names__darray, &VK_EXT_METAL_SURFACE_EXTENSION_NAME);
 }
 

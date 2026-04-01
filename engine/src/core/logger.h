@@ -58,3 +58,11 @@ KAPI void log_output(log_level level, const char* message, ...);
 // Does nothing when LOG_DEBUG_ENABLED != 1
 #define KDEBUG(message, ...)
 #endif
+
+#if LOG_TRACE_ENABLED == 1
+// logs a trace-level message
+#define KTRACE(message, ...) log_output(LOG_LEVEL_TRACE, message, ##__VA_ARGS__)
+#else
+// Does nothing when LOG_TRACE_ENABLED != 1
+#define KTRACE(message, ...)
+#endif

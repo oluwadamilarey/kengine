@@ -1,23 +1,23 @@
 #include "vulkan_backend.h"
 
 #include "vulkan_types.inl"
+#include "vulkan_platform.h"
 #include "vulkan_device.h"
 #include "vulkan_swapchain.h"
 #include "vulkan_renderpass.h"
 #include "vulkan_command_buffer.h"
-#include "vulkan_image.h"
 #include "vulkan_framebuffer.h"
 #include "vulkan_fence.h"
+#include "vulkan_utils.h"
 
-#include "core/application.h"
 #include "core/logger.h"
 #include "core/kstring.h"
 #include "core/kmemory.h"
+#include "core/application.h"
 
 #include "containers/darray.h"
+
 #include "platform/platform.h"
-#include "vulkan_platform.h"
-#include "core/kstring.h"
 
 // static Vulkan context
 static vulkan_context context;
@@ -34,148 +34,91 @@ i32 find_memory_index(u32 type_filter, u32 property_flags);
 
 void create_command_buffers(renderer_backend* backend);
 void regenerate_framebuffers(renderer_backend* backend, vulkan_swapchain* swapchain, vulkan_renderpass* renderpass);
+b8 recreate_swapchain(renderer_backend* backend);
 
-/**
- * @brief Initializes the Vulkan renderer backend.
- *
- * This function sets up the entire Vulkan rendering infrastructure in the following order:
- * 1. VkInstance creation (the connection between the application and Vulkan)
- * 2. Debug messenger setup (for validation layer messages in debug builds)
- * 3. Surface creation (platform-specific window surface for rendering)
- * 4. Logical device creation (interface to the physical GPU)
- * 5. Swapchain creation (manages the images we render to and present)
- * 6. Renderpass creation (defines how rendering operations are structured)
- * 7. Command buffer allocation (stores GPU commands for execution)
- *
- * @param backend Pointer to the renderer backend structure to initialize.
- * @param application_name The name of the application (shown in debugging tools).
- * @param plat_state Pointer to platform-specific state needed for surface creation.
- * @return TRUE if initialization succeeds, FALSE otherwise.
- */
 b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* application_name, struct platform_state* plat_state) {
-    /*
-     * ========================================================================
-     * CONTEXT INITIALIZATION
-     * ========================================================================
-     * The vulkan_context is a static global that holds all Vulkan state.
-     * We start by setting up utility function pointers and the allocator.
-     */
-    // Store a function pointer for finding suitable memory types during buffer/image allocation.
-    // This is used throughout the renderer when allocating GPU memory (e.g., vertex buffers, textures).
+    // Function pointers
     context.find_memory_index = find_memory_index;
-    // TODO: Implement a custom Vulkan memory allocator for better memory management.
-    // Using NULL (0) tells Vulkan to use its internal default allocator.
-    // A custom allocator would give us more control over memory allocation patterns.
+
+    // TODO: custom allocator.
     context.allocator = 0;
+
     application_get_framebuffer_size(&cached_framebuffer_width, &cached_framebuffer_height);
-    context.framebuffer_width = (cached_framebuffer_width != 0) ? cached_framebuffer_width : 800;  // Avoid zero dimensions
+    context.framebuffer_width = (cached_framebuffer_width != 0) ? cached_framebuffer_width : 800;
     context.framebuffer_height = (cached_framebuffer_height != 0) ? cached_framebuffer_height : 600;
     cached_framebuffer_width = 0;
     cached_framebuffer_height = 0;
-    /*
-     * ========================================================================
-     * VULKAN INSTANCE CREATION
-     * ========================================================================
-     * The VkInstance is the connection between our application and the Vulkan library.
-     * It holds per-application state and allows us to enumerate physical devices.
-     */
-    // VkApplicationInfo provides information about our application to the Vulkan driver.
-    // Some drivers may use this info for optimizations specific to well-known engines.
-    VkApplicationInfo app_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};  // sType must be set for all Vulkan structs
-    app_info.apiVersion = VK_API_VERSION_1_2;                           // Request Vulkan 1.2 API (provides modern features like timeline semaphores)
-    app_info.pApplicationName = application_name;                       // Application name (visible in GPU profiling tools)
-    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);             // Application version (major.minor.patch)
-    app_info.pEngineName = "Kohi Engine";                               // Engine name (also visible in profiling tools)
-    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);                  // Engine version
-    // VkInstanceCreateInfo describes how to create the VkInstance.
+
+    // Setup Vulkan instance.
+    VkApplicationInfo app_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
+    app_info.apiVersion = VK_API_VERSION_1_2;
+    app_info.pApplicationName = application_name;
+    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    app_info.pEngineName = "Kohi Engine";
+    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+
     VkInstanceCreateInfo create_info = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     create_info.pApplicationInfo = &app_info;
-    /*
-     * ------------------------------------------------------------------------
-     * INSTANCE EXTENSIONS
-     * ------------------------------------------------------------------------
-     * Extensions provide functionality beyond the core Vulkan specification.
-     * We need platform-specific extensions for window surface creation.
-     */
-    // Create a dynamic array to hold required extension names.
-    // Using darray allows us to build the list dynamically based on platform/debug settings.
+
+    // Obtain a list of required extensions
     const char** required_extensions = darray_create(const char*);
-    // VK_KHR_surface: Core extension for presenting rendered images to a window.
-    // This is required on ALL platforms that want to display graphics.
-    darray_push(required_extensions, &VK_KHR_SURFACE_EXTENSION_NAME);
-    /*
-     * Platform-specific surface extensions:
-     * Each platform has its own way of creating window surfaces.
-     * - macOS: Uses Metal via MoltenVK translation layer
-     * - Linux: Uses XCB (X11 protocol library) for X Window System
-     * - Windows: Uses Win32 API
-     */
-#if defined(KPLATFORM_APPLE)
-    // VK_EXT_metal_surface: Creates a Vulkan surface from a CAMetalLayer.
-    // MoltenVK translates Vulkan calls to Metal on Apple platforms.
-    darray_push(required_extensions, &VK_EXT_METAL_SURFACE_EXTENSION_NAME);
-
-    // VK_KHR_portability_enumeration: Required on macOS to enumerate devices
-    // that don't fully conform to Vulkan spec (MoltenVK is a "portability" implementation).
-    darray_push(required_extensions, &VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-#elif defined(KPLATFORM_LINUX)
-    // VK_KHR_xcb_surface: Creates surfaces for X11 windows via XCB.
-    darray_push(required_extensions, &VK_KHR_XCB_SURFACE_EXTENSION_NAME);
-#elif defined(KPLATFORM_WINDOWS)
-    // VK_KHR_win32_surface: Creates surfaces for Win32 windows (HWND).
-    darray_push(required_extensions, &VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-#endif
-
+    darray_push(required_extensions, &VK_KHR_SURFACE_EXTENSION_NAME);  // Generic surface extension
+    platform_get_required_extension_names(&required_extensions);       // Platform-specific extension(s)
 #if defined(_DEBUG)
-    // VK_EXT_debug_utils: Enables debug callbacks for validation layer messages.
-    // This allows us to receive warnings/errors about incorrect Vulkan usage.
-    darray_push(required_extensions, &VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    darray_push(required_extensions, &VK_EXT_DEBUG_UTILS_EXTENSION_NAME);  // debug utilities
 
-    // Log all requested extensions for debugging purposes.
-    KDEBUG("Requested Vulkan extensions:");
-    u64 req_ext_count = darray_length(required_extensions);
-    for (u64 i = 0; i < req_ext_count; ++i) {
-        KDEBUG("  %s", required_extensions[i]);
+    KDEBUG("Required extensions:");
+    u32 length = darray_length(required_extensions);
+    for (u32 i = 0; i < length; ++i) {
+        KDEBUG(required_extensions[i]);
     }
 #endif
-    // Allow the platform layer to add any additional required extensions.
-    // This provides flexibility for platform-specific requirements we might not know about here.
-    platform_get_required_extension_names(&required_extensions);
-    // Finalize extension configuration for instance creation.
-    u32 extension_count = (u32)darray_length(required_extensions);
-    const char** extensions = required_extensions;
-    create_info.enabledExtensionCount = extension_count;
-    create_info.ppEnabledExtensionNames = (const char* const*)extensions;
-    /*
-     * ------------------------------------------------------------------------
-     * VALIDATION LAYERS (Debug builds only)
-     * ------------------------------------------------------------------------
-     * Validation layers intercept Vulkan calls and check for incorrect usage.
-     * They're essential during development but have performance overhead.
-     */
+
+    create_info.enabledExtensionCount = darray_length(required_extensions);
+    create_info.ppEnabledExtensionNames = required_extensions;
+
+    // On Apple platforms, MoltenVK implements Vulkan over Metal and only exposes a
+    // "portability subset" physical device. Without the flag below, the Vulkan loader
+    // hides those devices and vkCreateInstance returns VK_ERROR_INCOMPATIBLE_DRIVER (-9).
+    //
+    // WHY IT CRASHED:
+    //   VK_CHECK logs the -9 error but does not abort, so execution continued with a
+    //   broken VkInstance. The very next step (creating the debug messenger) calls
+    //   vkGetInstanceProcAddr to look up vkCreateDebugUtilsMessengerEXT. Because the
+    //   instance was not properly initialised, this returned NULL. The KASSERT_MSG that
+    //   guards the NULL check then fired, producing the fatal "Failed to create debug
+    //   messenger!" crash.
+    //
+    // THE FIX (both parts are required together):
+    //   1. VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME added to the extension list
+    //      in platform_get_required_extension_names() (platform_macos.m).
+    //   2. VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR set here so the loader
+    //      knows the application explicitly opts in to portability-subset devices.
+#if defined(__APPLE__)
+    create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
+
+    // Validation layers.
     const char** required_validation_layer_names = 0;
     u32 required_validation_layer_count = 0;
+
+// If validation should be done, get a list of the required validation layert names
+// and make sure they exist. Validation layers should only be enabled on non-release builds.
 #if defined(_DEBUG)
     KINFO("Validation layers enabled. Enumerating...");
-    // Create a list of validation layers we want to enable.
+
+    // The list of validation layers required.
     required_validation_layer_names = darray_create(const char*);
-    // VK_LAYER_KHRONOS_validation: The standard, all-in-one validation layer.
-    // It combines all individual validation checks (parameter, object lifetime, threading, etc.)
-    const char* khronos_validation = "VK_LAYER_KHRONOS_validation";
-    darray_push(required_validation_layer_names, khronos_validation);
+    darray_push(required_validation_layer_names, &"VK_LAYER_KHRONOS_validation");
     required_validation_layer_count = darray_length(required_validation_layer_names);
-    /*
-     * We must verify that requested validation layers are actually available.
-     * Not all systems have the Vulkan SDK installed with validation layers.
-     */
-    // First call: Get the count of available layers (pass NULL for the array).
+
+    // Obtain a list of available validation layers
     u32 available_layer_count = 0;
     VK_CHECK(vkEnumerateInstanceLayerProperties(&available_layer_count, 0));
-    // Second call: Retrieve the actual layer properties.
     VkLayerProperties* available_layers = darray_reserve(VkLayerProperties, available_layer_count);
     VK_CHECK(vkEnumerateInstanceLayerProperties(&available_layer_count, available_layers));
-    // Check each required layer against the list of available layers.
-    // If any required layer is missing, we cannot proceed (validation is mandatory in debug).
+
+    // Verify all required layers are available. 
     for (u32 i = 0; i < required_validation_layer_count; ++i) {
         KINFO("Searching for layer: %s...", required_validation_layer_names[i]);
         b8 found = FALSE;
@@ -186,177 +129,115 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
                 break;
             }
         }
+
         if (!found) {
-            // Fatal error: Cannot run debug build without validation.
-            // User needs to install the Vulkan SDK.
             KFATAL("Required validation layer is missing: %s", required_validation_layer_names[i]);
             return FALSE;
         }
     }
     KINFO("All required validation layers are present.");
 #endif
-    // Configure validation layers in the instance create info.
-    // In release builds, these will be 0/NULL (no validation overhead).
-    create_info.enabledLayerCount = required_validation_layer_count;
-    create_info.ppEnabledLayerNames = (const char* const*)required_validation_layer_names;
-#if defined(KPLATFORM_APPLE)
-    // Required flag for MoltenVK: Allows enumeration of "non-conformant" Vulkan implementations.
-    // MoltenVK doesn't fully implement Vulkan (it translates to Metal), so this flag is needed.
-    create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-#endif
-    /*
-     * Create the VkInstance!
-     * This is the first major Vulkan object we create.
-     * All subsequent Vulkan calls will use this instance.
-     */
-    VK_CHECK(vkCreateInstance(&create_info, context.allocator, &context.instance));
 
-    /*
-     * ========================================================================
-     * DEBUG MESSENGER SETUP (Debug builds only)
-     * ========================================================================
-     * The debug messenger receives callbacks from validation layers.
-     * Messages include errors, warnings, and performance suggestions.
-     */
+    create_info.enabledLayerCount = required_validation_layer_count;
+    create_info.ppEnabledLayerNames = required_validation_layer_names;
+
+    VK_CHECK(vkCreateInstance(&create_info, context.allocator, &context.instance));
+    KINFO("Vulkan Instance created.");
+
+    // Debugger
 #if defined(_DEBUG)
     KDEBUG("Creating Vulkan debugger...");
+    u32 log_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;  //|
+                                                                      //    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
 
-    // Configure which message severities we want to receive.
-    // VERBOSE is commented out as it produces too much output for normal debugging.
-    u32 log_severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |    // API misuse, crashes
-                       VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |  // Potential issues
-                       VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;      // Informational
-                                                                          // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT; // Diagnostic spam
     VkDebugUtilsMessengerCreateInfoEXT debug_create_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
     debug_create_info.messageSeverity = log_severity;
-
-    // Configure which types of messages we want:
-    // - GENERAL: Non-specification events (e.g., creation/destruction)
-    // - PERFORMANCE: Potential performance issues (e.g., suboptimal resource usage)
-    // - VALIDATION: Specification violations (e.g., invalid parameters, incorrect state)
-    debug_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                                    VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-                                    VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-
-    // Our callback function that will receive all debug messages.
+    debug_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
     debug_create_info.pfnUserCallback = vk_debug_callback;
 
-    /*
-     * vkCreateDebugUtilsMessengerEXT is an extension function, not part of core Vulkan.
-     * We must look up its address using vkGetInstanceProcAddr.
-     * This pattern is common for extension functions.
-     */
     PFN_vkCreateDebugUtilsMessengerEXT func =
         (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context.instance, "vkCreateDebugUtilsMessengerEXT");
     KASSERT_MSG(func, "Failed to create debug messenger!");
-
-    // Create the debug messenger.
     VK_CHECK(func(context.instance, &debug_create_info, context.allocator, &context.debug_messenger));
     KDEBUG("Vulkan debugger created.");
 #endif
 
-    /*
-     * ========================================================================
-     * SURFACE CREATION
-     * ========================================================================
-     * A VkSurfaceKHR represents a platform-specific window surface.
-     * It's the bridge between Vulkan and the windowing system.
-     * The swapchain will use this surface to present rendered images.
-     */
+    // Surface
+    KDEBUG("Creating Vulkan surface...");
     if (!platform_create_vulkan_surface(plat_state, &context)) {
-        KFATAL("Failed to create Vulkan surface.");
+        KERROR("Failed to create platform surface!");
         return FALSE;
     }
-    /*
-     * ========================================================================
-     * LOGICAL DEVICE CREATION
-     * ========================================================================
-     * The logical device (VkDevice) is our interface to a physical GPU.
-     * vulkan_device_create() handles:
-     * - Enumerating and selecting a suitable physical device (GPU)
-     * - Creating queues for graphics, compute, and transfer operations
-     * - Enabling required device extensions (e.g., VK_KHR_swapchain)
-     */
+    KDEBUG("Vulkan surface created.");
+
+    // Device creation
     if (!vulkan_device_create(&context)) {
-        KFATAL("Failed to create Vulkan device.");
+        KERROR("Failed to create device!");
         return FALSE;
     }
-    /*
-     * ========================================================================
-     * SWAPCHAIN CREATION
-     * ========================================================================
-     * The swapchain manages a set of images that we render to and present.
-     * It handles double/triple buffering and synchronization with the display.
-     * Parameters: context, width, height, output swapchain.
-     */
-    vulkan_swapchain_create(&context, context.framebuffer_width, context.framebuffer_height, &context.swapchain);
-    /*
-     * ========================================================================
-     * RENDERPASS CREATION
-     * ========================================================================
-     * A renderpass defines the structure of rendering operations:
-     * - What attachments (color, depth) are used
-     * - How they're loaded/stored (clear, preserve, don't care)
-     * - Subpass dependencies for synchronization
-     *
-     * Parameters explained:
-     * - context: Vulkan context
-     * - main_renderpass: Output renderpass handle
-     * - x, y: Render area origin (0, 0 = full framebuffer)
-     * - width, height: Render area dimensions
-     * - r, g, b, a: Clear color (0, 0, 0, 1 = opaque black)
-     * - depth: Clear depth value (1.0 = far plane)
-     * - stencil: Clear stencil value (0)
-     */
-    vulkan_renderpass_create(&context, &context.main_renderpass, 0.0f, 0.0f,
-                             (f32)context.framebuffer_width, (f32)context.framebuffer_height,
-                             0.0f, 0.0f, 0.0f, 1.0f,  // Clear to opaque black
-                             1.0f, 0);                // Depth=1.0, stencil=0
-    // swapchain framebuffer
+
+    // Swapchain
+    vulkan_swapchain_create(
+        &context,
+        context.framebuffer_width,
+        context.framebuffer_height,
+        &context.swapchain);
+
+    vulkan_renderpass_create(
+        &context,
+        &context.main_renderpass,
+        0, 0, context.framebuffer_width, context.framebuffer_height,
+        /* Clear colour (r, g, b, a) in linear colour space — Vulkan always expects
+         * linear values for VkClearColorValue regardless of swapchain surface format.
+         * Tint yellow: roughly #F9E861 linearised (no gamma correction needed here
+         * since these feed directly into the attachment clear, not a shader). */
+        0.0f, 0.0f, 0.2f, 1.0f,
+        1.0f, /* depth clear value — 1.0 = far plane (standard for reverse-Z omitted here) */
+        0);   /* stencil clear value */
+
+    // Swapchain framebuffers.
     context.swapchain.framebuffers = darray_reserve(vulkan_framebuffer, context.swapchain.image_count);
     regenerate_framebuffers(backend, &context.swapchain, &context.main_renderpass);
-    /*
-     * ========================================================================
-     * COMMAND BUFFER CREATION
-     * ========================================================================
-     * Command buffers record GPU commands (draw calls, dispatches, etc.)
-     * We create one command buffer per swapchain image to allow recording
-     * commands for the next frame while the current frame is being presented.
-     */
+
+    // Create command buffers.
     create_command_buffers(backend);
 
-    // create sync objects
+    // Create sync objects.
     context.image_available_semaphores = darray_reserve(VkSemaphore, context.swapchain.max_frames_in_flight);
     context.queue_complete_semaphores = darray_reserve(VkSemaphore, context.swapchain.max_frames_in_flight);
     context.in_flight_fences = darray_reserve(vulkan_fence, context.swapchain.max_frames_in_flight);
 
-    for (u32 i = 0; i < context.swapchain.max_frames_in_flight; ++i) {
+    for (u8 i = 0; i < context.swapchain.max_frames_in_flight; ++i) {
         VkSemaphoreCreateInfo semaphore_create_info = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         vkCreateSemaphore(context.device.logical_device, &semaphore_create_info, context.allocator, &context.image_available_semaphores[i]);
         vkCreateSemaphore(context.device.logical_device, &semaphore_create_info, context.allocator, &context.queue_complete_semaphores[i]);
 
-        // create the fence in a signaled state, indicating that the first frame has already been rendered
-        //  this will prevent the application from wating indefintely for the first frame to render since it
-        //  cannot be rendered until a frame is "rendered" before it
+        // Create the fence in a signaled state, indicating that the first frame has already been "rendered".
+        // This will prevent the application from waiting indefinitely for the first frame to render since it
+        // cannot be rendered until a frame is "rendered" before it.
         vulkan_fence_create(&context, TRUE, &context.in_flight_fences[i]);
     }
 
-    // in-flight fences should not yet exist at this point, so clear the list. these are stored in pointers
-    // beacause the initial state should be 0, and will be 0 when not in use, Actual fences are not owned
+    // In flight fences should not yet exist at this point, so clear the list. These are stored in pointers
+    // because the initial state should be 0, and will be 0 when not in use. Acutal fences are not owned
     // by this list.
     context.images_in_flight = darray_reserve(vulkan_fence, context.swapchain.image_count);
     for (u32 i = 0; i < context.swapchain.image_count; ++i) {
         context.images_in_flight[i] = 0;
     }
+
     KINFO("Vulkan renderer initialized successfully.");
     return TRUE;
 }
 
 void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
     vkDeviceWaitIdle(context.device.logical_device);
-    // destroy in the opposite order of creation
 
-    // sync objects
+    // Destroy in the opposite order of creation.
+
+    // Sync objects
     for (u8 i = 0; i < context.swapchain.max_frames_in_flight; ++i) {
         if (context.image_available_semaphores[i]) {
             vkDestroySemaphore(
@@ -365,6 +246,14 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
                 context.allocator);
             context.image_available_semaphores[i] = 0;
         }
+        if (context.queue_complete_semaphores[i]) {
+            vkDestroySemaphore(
+                context.device.logical_device,
+                context.queue_complete_semaphores[i],
+                context.allocator);
+            context.queue_complete_semaphores[i] = 0;
+        }
+        vulkan_fence_destroy(&context, &context.in_flight_fences[i]);
     }
     darray_destroy(context.image_available_semaphores);
     context.image_available_semaphores = 0;
@@ -375,10 +264,10 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
     darray_destroy(context.in_flight_fences);
     context.in_flight_fences = 0;
 
-    _darray_destroy(context.images_in_flight);
+    darray_destroy(context.images_in_flight);
     context.images_in_flight = 0;
 
-    // command buffers
+    // Command buffers
     for (u32 i = 0; i < context.swapchain.image_count; ++i) {
         if (context.graphics_command_buffers[i].handle) {
             vulkan_command_buffer_free(
@@ -387,116 +276,208 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
                 &context.graphics_command_buffers[i]);
             context.graphics_command_buffers[i].handle = 0;
         }
-        vulkan_fence_destroy(&context, &context.in_flight_fences[i]);
     }
     darray_destroy(context.graphics_command_buffers);
     context.graphics_command_buffers = 0;
-    // destroy framebuffers
+
+    // Destroy framebuffers
     for (u32 i = 0; i < context.swapchain.image_count; ++i) {
         vulkan_framebuffer_destroy(&context, &context.swapchain.framebuffers[i]);
     }
 
-    // renderpass destroy
+    // Renderpass
     vulkan_renderpass_destroy(&context, &context.main_renderpass);
+
+    // Swapchain
     vulkan_swapchain_destroy(&context, &context.swapchain);
+
+    KDEBUG("Destroying Vulkan device...");
     vulkan_device_destroy(&context);
+
+    KDEBUG("Destroying Vulkan surface...");
     if (context.surface) {
         vkDestroySurfaceKHR(context.instance, context.surface, context.allocator);
-        context.surface = VK_NULL_HANDLE;
+        context.surface = 0;
     }
-    KDEBUG("Shutting down Vulkan renderer backend...");
+
+    KDEBUG("Destroying Vulkan debugger...");
     if (context.debug_messenger) {
         PFN_vkDestroyDebugUtilsMessengerEXT func =
             (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context.instance, "vkDestroyDebugUtilsMessengerEXT");
         func(context.instance, context.debug_messenger, context.allocator);
     }
+
     KDEBUG("Destroying Vulkan instance...");
     vkDestroyInstance(context.instance, context.allocator);
-    KDEBUG("Vulkan instance destroyed.");
-    KDEBUG("Vulkan renderer backend shut down.");
 }
 
 void vulkan_renderer_backend_on_resized(renderer_backend* backend, u16 width, u16 height) {
-    // update the framebuffer size generation, a counter which indicates that the
-    // framebuffer size had been updated. this is used to trigger swapchain recreation
-    // in the main loop, and is used to detect when the swapchain needs to be recreated.
-    context.framebuffer_width = width;
-    context.framebuffer_height = height;
-    context.recreating_swapchain = TRUE;
+    // Update the "framebuffer size generation", a counter which indicates when the
+    // framebuffer size has been updated.
+    cached_framebuffer_width = width;
+    cached_framebuffer_height = height;
     context.framebuffer_size_generation++;
-    KINFO("Vulkan renderer backend detected framebuffer resize: %ux%u (generation %u)", width, height, context.framebuffer_size_generation);
+
+    KINFO("Vulkan renderer backend->resized: w/h/gen: %i/%i/%llu", width, height, context.framebuffer_size_generation);
 }
 
 b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time) {
     vulkan_device* device = &context.device;
-    // check if recreating swapchain and boot out
+
+    // Check if recreating swap chain and boot out.
     if (context.recreating_swapchain) {
-        // KINFO("Vulkan renderer backend is currently recreating the swapchain, skipping frame.");
         VkResult result = vkDeviceWaitIdle(device->logical_device);
         if (!vulkan_result_is_success(result)) {
-            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle failed with error code %d", result);
+            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle (1) failed: '%s'", vulkan_result_string(result, TRUE));
             return FALSE;
         }
         KINFO("Recreating swapchain, booting.");
         return FALSE;
     }
-    // check if framebuffer size has changed since last frame, and if so, trigger swapchain recreation and boot out of the frame.
-    // if (context.framebuffer_width != cached_framebuffer_width || context.framebuffer_height != cached_framebuffer_height) {
-    //     KINFO("Framebuffer size change detected. Old: %ux%u, New: %ux%u. Triggering swapchain recreation.", cached_framebuffer_width, cached_framebuffer_height, context.framebuffer_width, context.framebuffer_height);
-    //     context.framebuffer_size_generation++;
-    //     cached_framebuffer_width = context.framebuffer_width;
-    //     cached_framebuffer_height = context.framebuffer_height;
-    //     return FALSE;
-    // }
-    if (context.framebuffer_size_generation != context.framebuffer_size_last_generation) {
-        VkResult result = vkDeviceWaitIdle(device->logical_device);
-        if (!vulkan_result_is_success(result)) {
-            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle failed with error code %d", result);
-            return FALSE;
-        }
-        // if the swapchain recreation failed (beacause, for exaple, the window was minimized
-        // and the framebuffer size became 0), then we should not attempt to recreate the
-        // swapchain until the framebuffer size becomes valid again. we can detect
-        // this by checking if the framebuffer size is 0, and if so,
-        // we will skip recreating the swapchain and wait for the next frame to check again.
-        if (!recreate_swapchain(backend)) {
-            KINFO("Swapchain recreation failed, likely due to invalid framebuffer size. Will retry on next frame.");
-            return FALSE;
-        }
-    }
-    // check if the framebuffer has been resized since the last swapchain recreation, and if so, recreate the swapchain.
-    // this is a secondary check to detect framebuffer size changes that may have been missed by the resize callback, which can happen on some platforms.
-    if (context.framebuffer_size_generation != context.framebuffer_size_last_generation) {
-        VkResult result = vkDeviceWaitIdle(device->logical_device);
-        if (!vulkan_result_is_success(result)) {
-            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle failed with error code %d", result);
-            return FALSE;
-        }
-        KINFO("Swapchain recreated successfully.");
 
-        // if the swapchain recreation failed(because, for example the window was minimized),
-        // boot out before unsetting the flag
-        if (!recreate_swapchain(backend)) {
-            KINFO("Swapchain recreation failed, likely due to invalid framebuffer size. Will retry on next frame.");
+    // Check if the framebuffer has been resized. If so, a new swapchain must be created.
+    if (context.framebuffer_size_generation != context.framebuffer_size_last_generation) {
+        VkResult result = vkDeviceWaitIdle(device->logical_device);
+        if (!vulkan_result_is_success(result)) {
+            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle (2) failed: '%s'", vulkan_result_string(result, TRUE));
             return FALSE;
         }
+
+        // If the swapchain recreation failed (because, for example, the window was minimized),
+        // boot out before unsetting the flag.
+        if (!recreate_swapchain(backend)) {
+            return FALSE;
+        }
+
+        KINFO("Resized, booting.");
+        return FALSE;
     }
+
+    // Wait for the execution of the current frame to complete. The fence being free will allow this one to move on.
+    if (!vulkan_fence_wait(
+            &context,
+            &context.in_flight_fences[context.current_frame],
+            UINT64_MAX)) {
+        KWARN("In-flight fence wait failure!");
+        return FALSE;
+    }
+
+    // Acquire the next image from the swap chain. Pass along the semaphore that should signaled when this completes.
+    // This same semaphore will later be waited on by the queue submission to ensure this image is available.
+    if (!vulkan_swapchain_acquire_next_image_index(
+            &context,
+            &context.swapchain,
+            UINT64_MAX,
+            context.image_available_semaphores[context.current_frame],
+            0,
+            &context.image_index)) {
+        return FALSE;
+    }
+
+    // Begin recording commands.
+    vulkan_command_buffer* command_buffer = &context.graphics_command_buffers[context.image_index];
+    vulkan_command_buffer_reset(command_buffer);
+    vulkan_command_buffer_begin(command_buffer, FALSE, FALSE, FALSE);
+
+    // Dynamic state
+    VkViewport viewport;
+    viewport.x = 0.0f;
+    viewport.y = (f32)context.framebuffer_height;
+    viewport.width = (f32)context.framebuffer_width;
+    viewport.height = -(f32)context.framebuffer_height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    // Scissor
+    VkRect2D scissor;
+    scissor.offset.x = scissor.offset.y = 0;
+    scissor.extent.width = context.framebuffer_width;
+    scissor.extent.height = context.framebuffer_height;
+
+    vkCmdSetViewport(command_buffer->handle, 0, 1, &viewport);
+    vkCmdSetScissor(command_buffer->handle, 0, 1, &scissor);
+
+    context.main_renderpass.w = context.framebuffer_width;
+    context.main_renderpass.h = context.framebuffer_height;
+
+    // Begin the render pass.
+    vulkan_renderpass_begin(
+        command_buffer,
+        &context.main_renderpass,
+        context.swapchain.framebuffers[context.image_index].handle);
+
     return TRUE;
 }
 
 b8 vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time) {
+    vulkan_command_buffer* command_buffer = &context.graphics_command_buffers[context.image_index];
+
+    // End renderpass
+    vulkan_renderpass_end(command_buffer, &context.main_renderpass);
+
+    vulkan_command_buffer_end(command_buffer);
+
+    // Make sure the previous frame is not using this image (i.e. its fence is being waited on)
+    if (context.images_in_flight[context.image_index] != VK_NULL_HANDLE) {  // was frame
+        vulkan_fence_wait(
+            &context,
+            context.images_in_flight[context.image_index],
+            UINT64_MAX);
+    }
+
+    // Mark the image fence as in-use by this frame.
+    context.images_in_flight[context.image_index] = &context.in_flight_fences[context.current_frame];
+
+    // Reset the fence for use on the next frame
+    vulkan_fence_reset(&context, &context.in_flight_fences[context.current_frame]);
+
+    // Submit the queue and wait for the operation to complete.
+    // Begin queue submission
+    VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+
+    // Command buffer(s) to be executed.
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &command_buffer->handle;
+
+    // The semaphore(s) to be signaled when the queue is complete.
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = &context.queue_complete_semaphores[context.current_frame];
+
+    // Wait semaphore ensures that the operation cannot begin until the image is available.
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = &context.image_available_semaphores[context.current_frame];
+
+    // Each semaphore waits on the corresponding pipeline stage to complete. 1:1 ratio.
+    // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT prevents subsequent colour attachment
+    // writes from executing until the semaphore signals (i.e. one frame is presented at a time)
+    VkPipelineStageFlags flags[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submit_info.pWaitDstStageMask = flags;
+
+    VkResult result = vkQueueSubmit(
+        context.device.graphics_queue,
+        1,
+        &submit_info,
+        context.in_flight_fences[context.current_frame].handle);
+    if (result != VK_SUCCESS) {
+        KERROR("vkQueueSubmit failed with result: %s", vulkan_result_string(result, TRUE));
+        return FALSE;
+    }
+
+    vulkan_command_buffer_update_submitted(command_buffer);
+    // End queue submission
+
+    // Give the image back to the swapchain.
+    vulkan_swapchain_present(
+        &context,
+        &context.swapchain,
+        context.device.graphics_queue,
+        context.device.present_queue,
+        context.queue_complete_semaphores[context.current_frame],
+        context.image_index);
+
     return TRUE;
 }
 
-/**
- * @brief Vulkan debug callback function.
- *
- * @param message_severity
- * @param message_types
- * @param callback_data
- * @param user_data
- * @return VkBool32
- */
 VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
     VkDebugUtilsMessageTypeFlagsEXT message_types,
@@ -514,78 +495,54 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
             KINFO(callback_data->pMessage);
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-            KINFO(callback_data->pMessage);
+            KTRACE(callback_data->pMessage);
             break;
     }
     return VK_FALSE;
 }
 
-/**
- * @brief Finds a memory type index that satisfies the given type filter and property flags.
- *
- * @param type_filter
- * @param property_flags
- * @return i32
- */
 i32 find_memory_index(u32 type_filter, u32 property_flags) {
     VkPhysicalDeviceMemoryProperties memory_properties;
     vkGetPhysicalDeviceMemoryProperties(context.device.physical_device, &memory_properties);
 
     for (u32 i = 0; i < memory_properties.memoryTypeCount; ++i) {
-        // check each memory type to see if it bits are set to 1, meaning that type is supported
-        if ((type_filter & (1 << i)) &&
-            (memory_properties.memoryTypes[i].propertyFlags & property_flags) == property_flags) {
-            return (i);
+        // Check each memory type to see if its bit is set to 1.
+        if (type_filter & (1 << i) && (memory_properties.memoryTypes[i].propertyFlags & property_flags) == property_flags) {
+            return i;
         }
     }
+
+    KWARN("Unable to find suitable memory type!");
     return -1;
 }
-
-// void create_command_buffers(renderer_backend* backend) {
-//     // Command buffer creation is deferred until after the swapchain is created, since command buffers reference the renderpass which references the swapchain's image format.
-//     // This allows us to avoid having to recreate command buffers when the swapchain is recreated on resize.
-//     vulkan_command_buffer_create(&context, &context.main_renderpass, &context.swapchain);
-// }
-
-// void create_command_buffers(renderer_backend* backend) {
-//     if(!context.graphics_command_buffers) {
-//         context.graphics_command_buffers = darray_reserve(vulkan_command_buffer, context.swapchain.image_count);
-//         for(u32 i = 0; i < context.swapchain.image_count; ++i) {
-//             vulkan_command_buffer cmd_buffer;
-//             vulkan_command_buffer_create(&context, &cmd_buffer);
-//             darray_push(context.graphics_command_buffers, cmd_buffer);
-//         }
-//     }
-// }
 
 void create_command_buffers(renderer_backend* backend) {
     if (!context.graphics_command_buffers) {
         context.graphics_command_buffers = darray_reserve(vulkan_command_buffer, context.swapchain.image_count);
         for (u32 i = 0; i < context.swapchain.image_count; ++i) {
             kzero_memory(&context.graphics_command_buffers[i], sizeof(vulkan_command_buffer));
-            // vulkan_command_buffer_create(&context, &context.graphics_command_buffers[i]);
         }
     }
 
     for (u32 i = 0; i < context.swapchain.image_count; ++i) {
         if (context.graphics_command_buffers[i].handle) {
-            vulkan_command_buffer_free(&context, context.device.graphics_command_pool, &context.graphics_command_buffers[i]);
+            vulkan_command_buffer_free(
+                &context,
+                context.device.graphics_command_pool,
+                &context.graphics_command_buffers[i]);
         }
-        //
         kzero_memory(&context.graphics_command_buffers[i], sizeof(vulkan_command_buffer));
-        vulkan_command_buffer_allocate(&context, context.device.graphics_command_pool, TRUE, &context.graphics_command_buffers[i]);
+        vulkan_command_buffer_allocate(
+            &context,
+            context.device.graphics_command_pool,
+            TRUE,
+            &context.graphics_command_buffers[i]);
     }
+
+    KDEBUG("Vulkan command buffers created.");
 }
 
 void regenerate_framebuffers(renderer_backend* backend, vulkan_swapchain* swapchain, vulkan_renderpass* renderpass) {
-    // // Free existing framebuffers if they exist
-    // if (swapchain->framebuffers) {
-    //     for (u32 i = 0; i < swapchain->image_count; ++i) {
-    //         vulkan_framebuffer_destroy(&context, &swapchain->framebuffers[i]);
-    //     }
-    //     kfree(swapchain->framebuffers, sizeof(vulkan_framebuffer) * swapchain->image_count, MEMORY_TAG_RENDERER);
-    //     swapchain->framebuffers = 0;
-    // }
     for (u32 i = 0; i < swapchain->image_count; ++i) {
         // TODO: make this dynamic based on the currently configured attachments
         u32 attachment_count = 2;
@@ -600,6 +557,136 @@ void regenerate_framebuffers(renderer_backend* backend, vulkan_swapchain* swapch
             context.framebuffer_height,
             attachment_count,
             attachments,
-            &context.swapchain.framebuffers[i]); 
+            &context.swapchain.framebuffers[i]);
     }
+}
+
+/**
+ * @brief Recreates the Vulkan swapchain and all dependent resources in response
+ *        to a framebuffer resize or swapchain invalidation (e.g. VK_ERROR_OUT_OF_DATE_KHR).
+ *
+ * This is a full teardown-and-rebuild of the swapchain surface stack:
+ *   swapchain → framebuffers → command buffers
+ *
+ * The renderpass itself is NOT recreated — only its viewport rect is patched
+ * to reflect the new dimensions, since renderpasses are compatible across
+ * surface resizes as long as attachment formats don't change.
+ *
+ * Reentrancy guard: a boolean flag (context.recreating_swapchain) prevents
+ * recursive or concurrent invocations, which can occur if begin_frame is
+ * called while a prior recreation is still in flight.
+ *
+ * @param backend  The renderer backend handle (threaded through to helpers
+ *                 such as regenerate_framebuffers and create_command_buffers).
+ *
+ * @return TRUE   Recreation succeeded; caller should retry the frame.
+ *         FALSE  Bailed out early (already recreating, zero-size window,
+ *                or a downstream Vulkan call failed).
+ */
+b8 recreate_swapchain(renderer_backend* backend) {
+    /* --- Reentrancy guard ------------------------------------------------
+     * begin_frame checks context.recreating_swapchain and returns FALSE,
+     * but if somehow we re-enter here, bail immediately to avoid a
+     * double-destroy of swapchain resources.                              */
+    if (context.recreating_swapchain) {
+        KDEBUG("recreate_swapchain called when already recreating. Booting.");
+        return FALSE;
+    }
+
+    /* --- Zero-size window guard ------------------------------------------
+     * A minimised window on most platforms reports 0×0. Attempting to create
+     * a swapchain with zero extents is a validation error; skip until the
+     * window is restored.                                                  */
+    if (context.framebuffer_width == 0 || context.framebuffer_height == 0) {
+        KDEBUG("recreate_swapchain called when window is < 1 in a dimension. Booting.");
+        return FALSE;
+    }
+
+    /* Lock recreation. begin_frame will spin-bail (returning FALSE each tick)
+     * until this flag is cleared at the bottom of this function.          */
+    context.recreating_swapchain = TRUE;
+
+    /* Drain the GPU before touching any resources it may still be reading.
+     * vkDeviceWaitIdle is coarse but correct here — recreation is infrequent
+     * and correctness matters more than latency on a resize path.         */
+    vkDeviceWaitIdle(context.device.logical_device);
+
+    /* Null-out per-image in-flight fence pointers. These are non-owning
+     * references into context.in_flight_fences; the actual fences are left
+     * intact. Clearing prevents stale pointer dereferences on the new image
+     * set, whose indices may not map 1:1 with the old swapchain.          */
+    for (u32 i = 0; i < context.swapchain.image_count; ++i) {
+        context.images_in_flight[i] = 0;
+    }
+
+    /* --- Requery device capabilities ------------------------------------
+     * Surface capabilities (min/max extents, present modes, formats) can
+     * change across a resize on some drivers/platforms. Always requery
+     * before passing extents to vulkan_swapchain_recreate.               */
+    vulkan_device_query_swapchain_support(
+        context.device.physical_device,
+        context.surface,
+        &context.device.swapchain_support);
+
+    /* Depth format selection is device-fixed, but re-detect in case a
+     * future path supports format negotiation or hot GPU swap.           */
+    vulkan_device_detect_depth_format(&context.device);
+
+    /* --- Rebuild the swapchain ------------------------------------------
+     * Uses the cached dimensions captured by on_resized(), not the stale
+     * context.framebuffer_* values, which reflect the *previous* frame.  */
+    vulkan_swapchain_recreate(
+        &context,
+        cached_framebuffer_width,
+        cached_framebuffer_height,
+        &context.swapchain);
+
+    /* Commit cached dimensions into the live context and renderpass rect.
+     * Reset the cache to 0 so that a subsequent resize during recreation
+     * increments framebuffer_size_generation again and triggers another
+     * recreate on the next begin_frame.                                  */
+    context.framebuffer_width = cached_framebuffer_width;
+    context.framebuffer_height = cached_framebuffer_height;
+    context.main_renderpass.w = context.framebuffer_width;
+    context.main_renderpass.h = context.framebuffer_height;
+    cached_framebuffer_width = 0;
+    cached_framebuffer_height = 0;
+
+    /* Acknowledge the resize event. When begin_frame next runs it will see
+     * last_generation == generation and skip the recreate branch.        */
+    context.framebuffer_size_last_generation = context.framebuffer_size_generation;
+
+    /* --- Destroy stale per-image resources ------------------------------
+     * Command buffers and framebuffers are tied to specific VkImage handles
+     * from the old swapchain. The new swapchain allocates fresh images, so
+     * these must be fully rebuilt — not just reset.                      */
+    for (u32 i = 0; i < context.swapchain.image_count; ++i) {
+        vulkan_command_buffer_free(
+            &context,
+            context.device.graphics_command_pool,
+            &context.graphics_command_buffers[i]);
+    }
+
+    for (u32 i = 0; i < context.swapchain.image_count; ++i) {
+        vulkan_framebuffer_destroy(&context, &context.swapchain.framebuffers[i]);
+    }
+
+    /* Patch renderpass render area to the new surface extents.
+     * Origin stays at (0,0) — fullscreen blit, no sub-region rendering.  */
+    context.main_renderpass.x = 0;
+    context.main_renderpass.y = 0;
+    context.main_renderpass.w = context.framebuffer_width;
+    context.main_renderpass.h = context.framebuffer_height;
+
+    /* --- Rebuild dependents in creation order ---------------------------
+     * Framebuffers reference swapchain image views → must come first.
+     * Command buffers are image-count-sized → allocate after framebuffers
+     * so image_count is stable.                                          */
+    regenerate_framebuffers(backend, &context.swapchain, &context.main_renderpass);
+    create_command_buffers(backend);
+
+    /* Release the lock. begin_frame will now proceed normally next tick.  */
+    context.recreating_swapchain = FALSE;
+
+    return TRUE;
 }

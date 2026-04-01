@@ -47,7 +47,6 @@ b8 application_create(game* game_inst) {
     KDEBUG("A test message: %f", 3.14f);
 
     // event_shutdown();
-
     if (!event_initialize()) {
         KERROR("Event system failed initialization. Application cannot continue.");
         return FALSE;
@@ -182,7 +181,7 @@ b8 application_on_event(u16 code, void* sender, void* listener_inst, event_conte
         //     return TRUE;
         // }
         // case EVENT_CODE_APPLICATION_RESUMED: {
-        //     app_state.is_suspended = FALSE; 
+        //     app_state.is_suspended = FALSE;
         //     return TRUE;
         // }
         default: {
@@ -218,4 +217,3 @@ b8 application_on_key(u16 code, void* sender, void* listener_inst, event_context
     }
     return FALSE;
 }
-
