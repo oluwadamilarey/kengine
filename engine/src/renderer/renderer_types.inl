@@ -7,7 +7,7 @@ typedef enum renderer_backend_type {
     RENDERER_BACKEND_TYPE_OPENGL,
     RENDERER_BACKEND_TYPE_DIRECTX,
     RENDERER_BACKEND_TYPE_METAL,
-} renderer_backend_type;
+} renderer_backend_type;//
 
 typedef struct renderer_backend {
     struct platform_state* plat_state;

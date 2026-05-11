@@ -62,10 +62,12 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
 
     // Obtain a list of required extensions
     const char** required_extensions = darray_create(const char*);
-    darray_push(required_extensions, &VK_KHR_SURFACE_EXTENSION_NAME);  // Generic surface extension
+    const char* surface_extension = VK_KHR_SURFACE_EXTENSION_NAME;
+    darray_push(required_extensions, surface_extension);  // Generic surface extension
     platform_get_required_extension_names(&required_extensions);       // Platform-specific extension(s)
 #if defined(_DEBUG)
-    darray_push(required_extensions, &VK_EXT_DEBUG_UTILS_EXTENSION_NAME);  // debug utilities
+    const char* debug_utils_extension = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    darray_push(required_extensions, debug_utils_extension);  // debug utilities
 
     KDEBUG("Required extensions:");
     u32 length = darray_length(required_extensions);
@@ -74,8 +76,6 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     }
 #endif
 
-    create_info.enabledExtensionCount = darray_length(required_extensions);
-    create_info.ppEnabledExtensionNames = required_extensions;
 
     // On Apple platforms, MoltenVK implements Vulkan over Metal and only exposes a
     // "portability subset" physical device. Without the flag below, the Vulkan loader
@@ -95,8 +95,12 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     //   2. VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR set here so the loader
     //      knows the application explicitly opts in to portability-subset devices.
 #if defined(__APPLE__)
+    const char* portability_extension = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+    darray_push(required_extensions, portability_extension);
     create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #endif
+    create_info.enabledExtensionCount = darray_length(required_extensions);
+    create_info.ppEnabledExtensionNames = required_extensions;
 
     // Validation layers.
     const char** required_validation_layer_names = 0;
@@ -109,7 +113,8 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
 
     // The list of validation layers required.
     required_validation_layer_names = darray_create(const char*);
-    darray_push(required_validation_layer_names, &"VK_LAYER_KHRONOS_validation");
+    const char* validation_layer_name = "VK_LAYER_KHRONOS_validation";
+    darray_push(required_validation_layer_names, validation_layer_name);
     required_validation_layer_count = darray_length(required_validation_layer_names);
 
     // Obtain a list of available validation layers
@@ -236,7 +241,6 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
     vkDeviceWaitIdle(context.device.logical_device);
 
     // Destroy in the opposite order of creation.
-
     // Sync objects
     for (u8 i = 0; i < context.swapchain.max_frames_in_flight; ++i) {
         if (context.image_available_semaphores[i]) {

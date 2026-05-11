@@ -10,7 +10,6 @@ void vulkan_command_buffer_allocate(
     b8 is_primary,
     vulkan_command_buffer* out_command_buffer) {
     kzero_memory(out_command_buffer, sizeof(vulkan_command_buffer));
-
     VkCommandBufferAllocateInfo allocate_info = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
     allocate_info.commandPool = command_pool;
     allocate_info.level = is_primary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY : VK_COMMAND_BUFFER_LEVEL_SECONDARY;
@@ -66,7 +65,7 @@ void vulkan_command_buffer_end(
 // Updates the command buffer's state to submitted. This should be called after submitting the command buffer to a queue, and is used to track when a command buffer is in-flight and cannot be reset or recorded to again until it has finished executing on the GPU.
 void vulkan_command_buffer_update_submitted(
     vulkan_command_buffer* command_buffer) {
-    command_buffer->state = COMMAND_BUFFER_STATE_SUBMITTED;
+    command_buffer->state = COMMAND_BUFFER_STATE_SUBMITTED; 
 }
 
 // Resets the command buffer to the ready state, allowing it to be recorded again. Only valid for primary command buffers that have already been submitted.
@@ -92,7 +91,6 @@ void vulkan_command_buffer_end_and_free_single_use(
     VkCommandPool command_pool,
     vulkan_command_buffer* command_buffer) {
     vulkan_command_buffer_end(command_buffer);
-
     VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &command_buffer->handle;

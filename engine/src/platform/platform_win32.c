@@ -193,7 +193,8 @@ void platform_sleep(u64 ms) {
 
 void platform_get_required_extension_names(const char*** names__darray) {
     // For Win32 platform, we need to add the VK_KHR_win32_surface extension.
-    darray_push(*names__darray, &VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+    const char* win32_surface_extension = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+    darray_push(*names__darray, win32_surface_extension);
 }
 
 // surface creation for vulkan

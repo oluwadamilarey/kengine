@@ -336,7 +336,8 @@ b8 platform_create_vulkan_surface(platform_state* plat_state, vulkan_context* co
 
 void platform_get_required_extension_names(const char*** names__darray) {
     // For Linux platform, we need to add the VK_KHR_xcb_surface extension.
-    darray_push(*names__darray, &VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+    const char* xcb_surface_extension = VK_KHR_XCB_SURFACE_EXTENSION_NAME;
+    darray_push(*names__darray, xcb_surface_extension);
 }
 
 keys translate_keycode(u32 x_keycode) {
