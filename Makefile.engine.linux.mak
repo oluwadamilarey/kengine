@@ -10,7 +10,6 @@ DEFINES := -D_DEBUG -DKEXPORT
 
 # Make does not offer a recursive wildcard function, so here's one:
 #rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
-
 SRC_FILES := $(shell find $(ASSEMBLY) -name *.c)		# .c files
 DIRECTORIES := $(shell find $(ASSEMBLY) -type d)		# directories with .h files
 OBJ_FILES := $(SRC_FILES:%=$(OBJ_DIR)/%.o)		# compiled .o objects
@@ -34,8 +33,8 @@ compile: #compile .c files
 
 .PHONY: clean
 clean: # clean build directory
-	rm -rf $(BUILD_DIR)\$(ASSEMBLY)
-	rm -rf $(OBJ_DIR)\$(ASSEMBLY)
+	rm -rf $(BUILD_DIR)/lib$(ASSEMBLY)$(EXTENSION)
+	rm -rf $(OBJ_DIR)/*
 
 $(OBJ_DIR)/%.c.o: %.c # compile .c to .o object
 	@echo   $<...

@@ -19,7 +19,10 @@
 
 #include "platform/platform.h"
 
-// static Vulkan context
+// static Vulkan context shared across the backend implementation. 
+// This is not ideal but it is simple and works for now. In the future, 
+// this should be refactored so that the context is owned by the renderer_backend 
+// and passed to functions that need it, rather than being a global variable.
 static vulkan_context context;
 static u32 cached_framebuffer_width = 0;
 static u32 cached_framebuffer_height = 0;
@@ -63,8 +66,8 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     // Obtain a list of required extensions
     const char** required_extensions = darray_create(const char*);
     const char* surface_extension = VK_KHR_SURFACE_EXTENSION_NAME;
-    darray_push(required_extensions, surface_extension);  // Generic surface extension
-    platform_get_required_extension_names(&required_extensions);       // Platform-specific extension(s)
+    darray_push(required_extensions, surface_extension);          // Generic surface extension
+    platform_get_required_extension_names(&required_extensions);  // Platform-specific extension(s)
 #if defined(_DEBUG)
     const char* debug_utils_extension = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     darray_push(required_extensions, debug_utils_extension);  // debug utilities
@@ -75,7 +78,6 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
         KDEBUG(required_extensions[i]);
     }
 #endif
-
 
     // On Apple platforms, MoltenVK implements Vulkan over Metal and only exposes a
     // "portability subset" physical device. Without the flag below, the Vulkan loader
@@ -123,7 +125,7 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     VkLayerProperties* available_layers = darray_reserve(VkLayerProperties, available_layer_count);
     VK_CHECK(vkEnumerateInstanceLayerProperties(&available_layer_count, available_layers));
 
-    // Verify all required layers are available. 
+    // Verify all required layers are available.
     for (u32 i = 0; i < required_validation_layer_count; ++i) {
         KINFO("Searching for layer: %s...", required_validation_layer_names[i]);
         b8 found = FALSE;
@@ -168,7 +170,6 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     VK_CHECK(func(context.instance, &debug_create_info, context.allocator, &context.debug_messenger));
     KDEBUG("Vulkan debugger created.");
 #endif
-
     // Surface
     KDEBUG("Creating Vulkan surface...");
     if (!platform_create_vulkan_surface(plat_state, &context)) {
@@ -176,13 +177,11 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
         return FALSE;
     }
     KDEBUG("Vulkan surface created.");
-
     // Device creation
     if (!vulkan_device_create(&context)) {
         KERROR("Failed to create device!");
         return FALSE;
     }
-
     // Swapchain
     vulkan_swapchain_create(
         &context,

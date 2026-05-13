@@ -10,7 +10,6 @@
  * @copyright Kohi Game Engine is Copyright (c) Travis Vroman 2021-2024
  *
  */
-
 #pragma once
 #include <stdbool.h>
 
@@ -291,6 +290,15 @@ KINLINE krange get_aligned_range(u64 offset, u64 size, u64 granularity) {
 
 #define KMIN(x, y) (x < y ? x : y)
 #define KMAX(x, y) (x > y ? x : y)
+
+// Inlining
+#ifdef _MSC_VER
+#define KINLINE __forceinline
+#define KNOINLINE __declspec(noinline)
+#else
+#define KINLINE static inline
+#define KNOINLINE
+#endif
 
 /**
  * @brief Indicates if the provided flag is set in the given flags int.

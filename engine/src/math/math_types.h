@@ -50,3 +50,7 @@ typedef struct vec4_u {
 } vec4;
 
 typedef vec4 quat;
+
+typedef union mat4_u {
+    f32 data[16];
+} mat4;
