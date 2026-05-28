@@ -47,7 +47,7 @@ b8 vulkan_device_create(vulkan_context* context) {
     KINFO("Selecting Vulkan physical device...");
     if (!select_physical_device(context)) {
         KFATAL("Failed to select a suitable Vulkan physical device.");
-        return FALSE;
+        return false;
     }
     KINFO("Vulkan physical device selected successfully.");
 
@@ -127,7 +127,7 @@ b8 vulkan_device_create(vulkan_context* context) {
         available_extensions);
 
     // Check for portability subset (required on MoltenVK)
-    b8 portability_subset_available = FALSE;
+    b8 portability_subset_available = false;
     for (u32 i = 0; i < available_extension_count; ++i) {
         if (strings_equal(available_extensions[i].extensionName, "VK_KHR_portability_subset")) {
             portability_subset_available = TRUE;
@@ -172,7 +172,7 @@ b8 vulkan_device_create(vulkan_context* context) {
 
     if (result != VK_SUCCESS) {
         KFATAL("Failed to create logical device. VkResult: %d", result);
-        return FALSE;
+        return false;
     }
 
     KINFO("Logical device created.");
@@ -331,7 +331,7 @@ b8 vulkan_device_detect_depth_format(
     }
 
     KFATAL("Failed to find a supported depth format.");
-    return FALSE;
+    return false;
 }
 
 void vulkan_device_destroy(vulkan_context* context) {
@@ -384,7 +384,7 @@ b8 select_physical_device(vulkan_context* context) {
 
     if (physical_device_count == 0) {
         KERROR("No Vulkan physical devices found.");
-        return FALSE;
+        return false;
     }
 
     VkPhysicalDevice physical_devices[physical_device_count];
@@ -406,7 +406,7 @@ b8 select_physical_device(vulkan_context* context) {
         requirements.compute = TRUE;
         requirements.transfer = TRUE;
         requirements.sampler_anisotropy = TRUE;
-        requirements.discrete_gpu = FALSE;
+        requirements.discrete_gpu = false;
 
         const char* required_device_extensions[] = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -485,7 +485,7 @@ b8 select_physical_device(vulkan_context* context) {
 
     // Fix 5: Explicit return when no device found
     KERROR("No physical devices were found which meet the requirements.");
-    return FALSE;
+    return false;
 }
 
 b8 physical_device_meets_requirements(
@@ -506,7 +506,7 @@ b8 physical_device_meets_requirements(
     if (requirements->discrete_gpu) {
         if (properties->deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
             KINFO("Physical device '%s' rejected: not a discrete GPU.", properties->deviceName);
-            return FALSE;
+            return false;
         }
     }
 
@@ -516,7 +516,7 @@ b8 physical_device_meets_requirements(
 
     if (queue_family_count == 0) {
         KWARN("Physical device '%s' has no queue families", properties->deviceName);
-        return FALSE;
+        return false;
     }
 
     VkQueueFamilyProperties* queue_families = darray_reserve(VkQueueFamilyProperties, queue_family_count);
@@ -596,22 +596,22 @@ b8 physical_device_meets_requirements(
     // Validate required queue families were found
     if (requirements->graphics && out_queue_info->graphics_family_index == -1) {
         KINFO("Device '%s' rejected: No graphics queue family", properties->deviceName);
-        return FALSE;
+        return false;
     }
 
     if (requirements->present && out_queue_info->present_family_index == -1) {
         KINFO("Device '%s' rejected: No present queue family", properties->deviceName);
-        return FALSE;
+        return false;
     }
 
     if (requirements->compute && out_queue_info->compute_family_index == -1) {
         KINFO("Device '%s' rejected: No compute queue family", properties->deviceName);
-        return FALSE;
+        return false;
     }
 
     if (requirements->transfer && out_queue_info->transfer_family_index == -1) {
         KINFO("Device '%s' rejected: No transfer queue family", properties->deviceName);
-        return FALSE;
+        return false;
     }
 
     // Query swapchain support
@@ -639,7 +639,7 @@ b8 physical_device_meets_requirements(
             out_swapchain_support->present_modes = NULL;
             out_swapchain_support->present_mode_count = 0;
         }
-        return FALSE;
+        return false;
     }
 
     KINFO("  Swapchain support: %d formats, %d present modes",
@@ -653,7 +653,7 @@ b8 physical_device_meets_requirements(
 
         if (available_extension_count == 0) {
             KINFO("Device '%s' rejected: No extensions available", properties->deviceName);
-            return FALSE;
+            return false;
         }
 
         VkExtensionProperties* available_extensions = kallocate(
@@ -667,7 +667,7 @@ b8 physical_device_meets_requirements(
                required_extension_count, available_extension_count);
 
         for (u32 i = 0; i < required_extension_count; ++i) {
-            b8 found = FALSE;
+            b8 found = false;
             const char* required_ext = requirements->device_extension_names[i];
 
             for (u32 j = 0; j < available_extension_count; ++j) {
@@ -684,7 +684,7 @@ b8 physical_device_meets_requirements(
                 kfree(available_extensions,
                       sizeof(VkExtensionProperties) * available_extension_count,
                       MEMORY_TAG_RENDERER);
-                return FALSE;
+                return false;
             }
         }
 
@@ -696,7 +696,7 @@ b8 physical_device_meets_requirements(
     // Check sampler anisotropy
     if (requirements->sampler_anisotropy && !features->samplerAnisotropy) {
         KINFO("Device '%s' rejected: samplerAnisotropy not supported", properties->deviceName);
-        return FALSE;
+        return false;
     }
 
     KINFO("Device '%s' meets all requirements!", properties->deviceName);

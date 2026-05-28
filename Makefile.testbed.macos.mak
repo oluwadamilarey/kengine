@@ -3,7 +3,13 @@ OBJ_DIR := obj
 
 ASSEMBLY := testbed
 EXTENSION :=
-COMPILER_FLAGS := -g -fdeclspec -Wno-missing-braces
+COMPILER_FLAGS := -g -MD \
+                  -Wvla \
+                  -Werror=vla \
+                  -Wvla-extension \
+                  -Werror=vla-extension \
+                  -fdeclspec \
+                  -fPIC
 INCLUDE_FLAGS := -Iengine/src -Itestbed/src
 LINKER_FLAGS := -g \
 	-L./$(BUILD_DIR) \

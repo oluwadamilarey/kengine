@@ -90,6 +90,23 @@
         "cwd": "${workspaceFolder}"
       },
       "group": "build"
+    },
+    {
+      "type": "shell",
+      "label": "Post Build",
+      "windows": {
+        "command": "${workspaceFolder}/post-build.bat"
+      },
+      "linux": {
+        "command": "${workspaceFolder}/post-build.sh"
+      },
+      "osx": {
+        "command": "${workspaceFolder}/post-build-macos.sh"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build"
     }
   ],
   "version": "2.0.0"

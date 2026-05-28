@@ -33,14 +33,15 @@ void vulkan_framebuffer_create(
 
 void vulkan_framebuffer_destroy(
     vulkan_context* context, vulkan_framebuffer* framebuffer) {
+    u32 attachment_count = framebuffer->attachment_count;
     if (framebuffer && framebuffer->handle) {
         vkDestroyFramebuffer(context->device.logical_device, framebuffer->handle, context->allocator);
         framebuffer->handle = 0;
     }
     framebuffer->renderpass = 0;
-    framebuffer->attachment_count = 0;
     if (framebuffer->attachments) {
-        kfree(framebuffer->attachments, sizeof(VkImageView) * framebuffer->attachment_count, MEMORY_TAG_RENDERER);
+        kfree(framebuffer->attachments, sizeof(VkImageView) * attachment_count, MEMORY_TAG_RENDERER);
         framebuffer->attachments = 0;
     }
+    framebuffer->attachment_count = 0;
 }

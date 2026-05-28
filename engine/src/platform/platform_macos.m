@@ -128,14 +128,14 @@ keys translate_keycode(unsigned short keycode);
 }
 - (void)keyUp:(NSEvent *)event {
     keys key = translate_keycode([event keyCode]);
-    if (key) input_process_key(key, FALSE);
+    if (key) input_process_key(key, false);
 }
 - (void)flagsChanged:(NSEvent *)event {
     NSEventModifierFlags flags = [event modifierFlags];
     unsigned short kc = [event keyCode];
     keys key = translate_keycode(kc);
     if (!key) return;
-    b8 pressed = FALSE;
+    b8 pressed = false;
     switch (kc) {
         case 0x38: case 0x3C: pressed = (flags & NSEventModifierFlagShift)   != 0; break;
         case 0x3B: case 0x3E: pressed = (flags & NSEventModifierFlagControl) != 0; break;
@@ -147,14 +147,14 @@ keys translate_keycode(unsigned short keycode);
 
 /* Mouse buttons */
 - (void)mouseDown:(NSEvent *)e      { input_process_button(BUTTON_LEFT,   TRUE);  }
-- (void)mouseUp:(NSEvent *)e        { input_process_button(BUTTON_LEFT,   FALSE); }
+- (void)mouseUp:(NSEvent *)e        { input_process_button(BUTTON_LEFT,   false); }
 - (void)rightMouseDown:(NSEvent *)e { input_process_button(BUTTON_RIGHT,  TRUE);  }
-- (void)rightMouseUp:(NSEvent *)e   { input_process_button(BUTTON_RIGHT,  FALSE); }
+- (void)rightMouseUp:(NSEvent *)e   { input_process_button(BUTTON_RIGHT,  false); }
 - (void)otherMouseDown:(NSEvent *)e {
     if ([e buttonNumber] == 2) input_process_button(BUTTON_MIDDLE, TRUE);
 }
 - (void)otherMouseUp:(NSEvent *)e {
-    if ([e buttonNumber] == 2) input_process_button(BUTTON_MIDDLE, FALSE);
+    if ([e buttonNumber] == 2) input_process_button(BUTTON_MIDDLE, false);
 }
 
 /* Mouse movement */
@@ -238,7 +238,7 @@ b8 platform_startup(
                           defer:NO];
         if (!state->window) {
             KFATAL("Failed to create NSWindow");
-            return FALSE;
+            return false;
         }
         [state->window setTitle:appName];
 
@@ -253,7 +253,7 @@ b8 platform_startup(
         state->metal_layer = state->content_view.metalLayer;
         if (!state->metal_layer) {
             KFATAL("Failed to obtain CAMetalLayer");
-            return FALSE;
+            return false;
         }
 
         CGFloat scale = [[NSScreen mainScreen] backingScaleFactor];
@@ -399,7 +399,7 @@ b8 platform_create_vulkan_surface(
 
         if (!state || !state->metal_layer) {
             KERROR("platform_create_vulkan_surface: metal_layer is NULL");
-            return FALSE;
+            return false;
         }
 
         /* C99 zero-initialiser  (= {} is C++, not C99) */
@@ -415,7 +415,7 @@ b8 platform_create_vulkan_surface(
 
         if (result != VK_SUCCESS) {
             KERROR("vkCreateMetalSurfaceEXT failed: %d", result);
-            return FALSE;
+            return false;
         }
 
         KINFO("Vulkan Metal surface created (handle=%p)", (void *)context->surface);
@@ -456,8 +456,9 @@ keys translate_keycode(unsigned short kc) {
         case 0x33: return KEY_BACKSPACE;  case 0x35: return KEY_ESCAPE;
         case 0x36: return KEY_RWIN;       case 0x37: return KEY_LWIN;
         case 0x38: return KEY_LSHIFT;     case 0x39: return KEY_CAPITAL;
-        case 0x3A: return KEY_LMENU;      case 0x3B: return KEY_LCONTROL;
-        case 0x3C: return KEY_RSHIFT;     case 0x3D: return KEY_RMENU;
+        //case 0x3A: return KEY_LMENU;      
+        case 0x3B: return KEY_LCONTROL;
+        case 0x3C: return KEY_RSHIFT;     //case 0x3D: return KEY_RMENU;
         case 0x3E: return KEY_RCONTROL;
 
         case 0x7A: return KEY_F1;         case 0x78: return KEY_F2;
@@ -482,6 +483,9 @@ keys translate_keycode(unsigned short kc) {
         case 0x73: return KEY_HOME;       case 0x77: return KEY_END;
         case 0x74: return KEY_PRIOR;      case 0x79: return KEY_NEXT;
         case 0x75: return KEY_DELETE;     case 0x72: return KEY_INSERT;
+
+        case 0x3A: return KEY_LALT;
+        case 0x3D: return KEY_RALT;
 
         default: return 0;
     }

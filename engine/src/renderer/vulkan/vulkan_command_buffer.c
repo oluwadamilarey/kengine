@@ -65,7 +65,7 @@ void vulkan_command_buffer_end(
 // Updates the command buffer's state to submitted. This should be called after submitting the command buffer to a queue, and is used to track when a command buffer is in-flight and cannot be reset or recorded to again until it has finished executing on the GPU.
 void vulkan_command_buffer_update_submitted(
     vulkan_command_buffer* command_buffer) {
-    command_buffer->state = COMMAND_BUFFER_STATE_SUBMITTED; 
+    command_buffer->state = COMMAND_BUFFER_STATE_SUBMITTED;
 }
 
 // Resets the command buffer to the ready state, allowing it to be recorded again. Only valid for primary command buffers that have already been submitted.
@@ -82,7 +82,7 @@ void vulkan_command_buffer_allocate_and_begin_single_use(
     b8 is_primary,
     vulkan_command_buffer* out_command_buffer) {
     vulkan_command_buffer_allocate(context, command_pool, is_primary, out_command_buffer);
-    vulkan_command_buffer_begin(out_command_buffer, TRUE, FALSE, FALSE);
+    vulkan_command_buffer_begin(out_command_buffer, TRUE, false, false);
 }
 
 // Convenience function for ending and freeing a single-use command buffer in one call.

@@ -117,8 +117,8 @@ STATIC_ASSERT(sizeof(f64) == 8, "Expected f64 to be 8 bytes.");
 /** @brief True.*/
 #define TRUE 1
 
-/** @brief False. */
-#define FALSE 0
+/** @brief false. */
+#define false 0
 
 /**
  * @brief Any id set to this should be considered invalid,

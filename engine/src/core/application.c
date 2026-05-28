@@ -21,13 +21,13 @@ typedef struct application_state {
     clock clock;
 } application_state;
 
-static b8 initialized = FALSE;
+static b8 initialized = false;
 static application_state app_state;
 
 b8 application_create(game* game_inst) {
     if (initialized) {
         KERROR("application_create called more than once.");
-        return FALSE;
+        return false;
     }
 
     app_state.game_inst = game_inst;
@@ -49,10 +49,10 @@ b8 application_create(game* game_inst) {
     // event_shutdown();
     if (!event_initialize()) {
         KERROR("Event system failed initialization. Application cannot continue.");
-        return FALSE;
+        return false;
     }
     app_state.is_running = TRUE;
-    app_state.is_suspended = FALSE;
+    app_state.is_suspended = false;
 
     if (!platform_startup(
             &app_state.platform,
@@ -61,20 +61,20 @@ b8 application_create(game* game_inst) {
             game_inst->app_config.start_pos_y,
             game_inst->app_config.start_width,
             game_inst->app_config.start_height)) {
-        return FALSE;
+        return false;
     }
 
     // Renderer startup
     if (!renderer_initialize(game_inst->app_config.name, &app_state.platform)) {
         KFATAL("Failed to initialize renderer. Aborting application.");
-        return FALSE;
+        return false;
     }
     // Initialize clock system with platform state
     clock_set_platform_state(&app_state.platform);
     // Initialize the game.
     if (!app_state.game_inst->initialize(app_state.game_inst)) {
         KFATAL("Game failed to initialize.");
-        return FALSE;
+        return false;
     }
 
     app_state.game_inst->on_resize(app_state.game_inst, app_state.width, app_state.height);
@@ -95,7 +95,7 @@ b8 application_run() {
     KINFO(get_memory_usage_str());
     while (app_state.is_running) {
         if (!platform_pump_messages(&app_state.platform)) {
-            app_state.is_running = FALSE;
+            app_state.is_running = false;
         }
 
         if (!app_state.is_suspended) {
@@ -106,14 +106,14 @@ b8 application_run() {
 
             if (!app_state.game_inst->update(app_state.game_inst, (f32)delta)) {
                 KFATAL("Game update failed, shutting down.");
-                app_state.is_running = FALSE;
+                app_state.is_running = false;
                 break;
             }
 
             // Call the game's render routine.
             if (!app_state.game_inst->render(app_state.game_inst, (f32)delta)) {
                 KFATAL("Game render failed, shutting down.");
-                app_state.is_running = FALSE;
+                app_state.is_running = false;
                 break;
             }
 
@@ -132,7 +132,7 @@ b8 application_run() {
                 u64 remaining_ms = (remaining_seconds * 1000);
 
                 // If there is time left, give it back to the OS.
-                b8 limit_frames = FALSE;
+                b8 limit_frames = false;
                 if (remaining_ms > 0 && limit_frames) {
                     platform_sleep(remaining_ms - 1);
                 }
@@ -150,7 +150,7 @@ b8 application_run() {
         }
     }
 
-    app_state.is_running = FALSE;
+    app_state.is_running = false;
 
     // Shutdown event system.
     event_unregister(EVENT_CODE_APPLICATION_QUIT, 0, application_on_event);
@@ -172,7 +172,7 @@ void application_get_framebuffer_size(u32* width, u32* height) {
 b8 application_on_event(u16 code, void* sender, void* listener_inst, event_context context) {
     switch (code) {
         case EVENT_CODE_APPLICATION_QUIT: {
-            app_state.is_running = FALSE;
+            app_state.is_running = false;
             KINFO("EVENT_CODE_APPLICATION_QUIT recieved, shutting down.\n");
             return TRUE;
         }
@@ -181,11 +181,11 @@ b8 application_on_event(u16 code, void* sender, void* listener_inst, event_conte
         //     return TRUE;
         // }
         // case EVENT_CODE_APPLICATION_RESUMED: {
-        //     app_state.is_suspended = FALSE;
+        //     app_state.is_suspended = false;
         //     return TRUE;
         // }
         default: {
-            return FALSE;
+            return false;
         }
     }
 }
@@ -215,5 +215,5 @@ b8 application_on_key(u16 code, void* sender, void* listener_inst, event_context
             KDEBUG("'%c' key released in window.", key_code);
         }
     }
-    return FALSE;
+    return false;
 }
