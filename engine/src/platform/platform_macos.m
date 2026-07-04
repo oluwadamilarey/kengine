@@ -49,7 +49,7 @@ keys translate_keycode(unsigned short keycode);
 
 - (BOOL)windowShouldClose:(NSWindow *)sender {
     KINFO("Window close requested");
-    *self.quit_flagged = TRUE;
+    *self.quit_flagged = true;
     return NO;
 }
 
@@ -124,7 +124,7 @@ keys translate_keycode(unsigned short keycode);
 /* Keyboard */
 - (void)keyDown:(NSEvent *)event {
     keys key = translate_keycode([event keyCode]);
-    if (key) input_process_key(key, TRUE);
+    if (key) input_process_key(key, true);
 }
 - (void)keyUp:(NSEvent *)event {
     keys key = translate_keycode([event keyCode]);
@@ -146,12 +146,12 @@ keys translate_keycode(unsigned short keycode);
 }
 
 /* Mouse buttons */
-- (void)mouseDown:(NSEvent *)e      { input_process_button(BUTTON_LEFT,   TRUE);  }
+- (void)mouseDown:(NSEvent *)e      { input_process_button(BUTTON_LEFT,   true);  }
 - (void)mouseUp:(NSEvent *)e        { input_process_button(BUTTON_LEFT,   false); }
-- (void)rightMouseDown:(NSEvent *)e { input_process_button(BUTTON_RIGHT,  TRUE);  }
+- (void)rightMouseDown:(NSEvent *)e { input_process_button(BUTTON_RIGHT,  true);  }
 - (void)rightMouseUp:(NSEvent *)e   { input_process_button(BUTTON_RIGHT,  false); }
 - (void)otherMouseDown:(NSEvent *)e {
-    if ([e buttonNumber] == 2) input_process_button(BUTTON_MIDDLE, TRUE);
+    if ([e buttonNumber] == 2) input_process_button(BUTTON_MIDDLE, true);
 }
 - (void)otherMouseUp:(NSEvent *)e {
     if ([e buttonNumber] == 2) input_process_button(BUTTON_MIDDLE, false);
@@ -270,7 +270,7 @@ b8 platform_startup(
 
         KINFO("macOS platform started: %dx%d @ (%d,%d) Retina×%.1f",
               width, height, x, y, scale);
-        return TRUE;
+        return true;
     }
 }
 
@@ -419,7 +419,7 @@ b8 platform_create_vulkan_surface(
         }
 
         KINFO("Vulkan Metal surface created (handle=%p)", (void *)context->surface);
-        return TRUE;
+        return true;
     }
 }
 

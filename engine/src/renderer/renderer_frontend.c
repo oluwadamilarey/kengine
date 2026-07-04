@@ -19,7 +19,7 @@ b8 renderer_initialize(const char* application_name, struct platform_state* plat
         KFATAL("Renderer backend failed to initialize. Shutting down.");
         return false;
     }
-    return TRUE;
+    return true;
 }
 
 void renderer_shutdown() {
@@ -48,5 +48,5 @@ b8 renderer_draw_frame(render_packet* packet) {
         }
     }
 
-    return TRUE;
+    return true;
 }

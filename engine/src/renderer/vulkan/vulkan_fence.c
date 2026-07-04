@@ -37,12 +37,12 @@ b8 vulkan_fence_wait(vulkan_context* context, vulkan_fence* fence, u64 timeout_m
             context->device.logical_device,
             1,
             &fence->handle,
-            TRUE,
+            true,
             timeout_ms);
         switch (result) {
             case VK_SUCCESS:
-                fence->is_signaled = TRUE;
-                return TRUE;
+                fence->is_signaled = true;
+                return true;
             case VK_TIMEOUT:
                 KWARN("vk_fence_wait - Timed out");
                 break;
@@ -61,7 +61,7 @@ b8 vulkan_fence_wait(vulkan_context* context, vulkan_fence* fence, u64 timeout_m
         }
     } else {
         // if already signaled, do not wait.
-        return TRUE;
+        return true;
     }
     return false;
 }

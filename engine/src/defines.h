@@ -114,8 +114,8 @@ STATIC_ASSERT(sizeof(f32) == 4, "Expected f32 to be 4 bytes.");
 /** @brief Assert f64 to be 8 bytes.*/
 STATIC_ASSERT(sizeof(f64) == 8, "Expected f64 to be 8 bytes.");
 
-/** @brief True.*/
-#define TRUE 1
+/** @brief true.*/
+#define true 1
 
 /** @brief false. */
 #define false 0

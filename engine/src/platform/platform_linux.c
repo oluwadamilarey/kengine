@@ -168,7 +168,7 @@ b8 platform_startup(
         return false;
     }
 
-    return TRUE;
+    return true;
 }
 
 void platform_shutdown(platform_state* plat_state) {
@@ -257,7 +257,7 @@ b8 platform_pump_messages(platform_state* plat_state) {
 
                 // Window close
                 if (cm->data.data32[0] == state->wm_delete_win) {
-                    quit_flagged = TRUE;
+                    quit_flagged = true;
                 }
             } break;
             default:
@@ -331,7 +331,7 @@ b8 platform_create_vulkan_surface(platform_state* plat_state, vulkan_context* co
         return false;
     }
     context->surface = state->surface;
-    return TRUE;
+    return true;
 }
 
 void platform_get_required_extension_names(const char*** names__darray) {

@@ -51,7 +51,7 @@ b8 application_create(game* game_inst) {
         KERROR("Event system failed initialization. Application cannot continue.");
         return false;
     }
-    app_state.is_running = TRUE;
+    app_state.is_running = true;
     app_state.is_suspended = false;
 
     if (!platform_startup(
@@ -79,9 +79,9 @@ b8 application_create(game* game_inst) {
 
     app_state.game_inst->on_resize(app_state.game_inst, app_state.width, app_state.height);
 
-    initialized = TRUE;
+    initialized = true;
 
-    return TRUE;
+    return true;
 }
 
 b8 application_run() {
@@ -161,7 +161,7 @@ b8 application_run() {
     renderer_shutdown();
     platform_shutdown(&app_state.platform);
 
-    return TRUE;
+    return true;
 }
 
 void application_get_framebuffer_size(u32* width, u32* height) {
@@ -174,15 +174,15 @@ b8 application_on_event(u16 code, void* sender, void* listener_inst, event_conte
         case EVENT_CODE_APPLICATION_QUIT: {
             app_state.is_running = false;
             KINFO("EVENT_CODE_APPLICATION_QUIT recieved, shutting down.\n");
-            return TRUE;
+            return true;
         }
         // case EVENT_CODE_APPLICATION_SUSPENDED: {
-        //     app_state.is_suspended = TRUE;
-        //     return TRUE;
+        //     app_state.is_suspended = true;
+        //     return true;
         // }
         // case EVENT_CODE_APPLICATION_RESUMED: {
         //     app_state.is_suspended = false;
-        //     return TRUE;
+        //     return true;
         // }
         default: {
             return false;
@@ -199,7 +199,7 @@ b8 application_on_key(u16 code, void* sender, void* listener_inst, event_context
             event_fire(EVENT_CODE_APPLICATION_QUIT, 0, data);
 
             // Block anything else from processing this.
-            return TRUE;
+            return true;
         } else if (key_code == KEY_A) {
             // Example on checking for a key
             KDEBUG("Explicit - A key pressed!");

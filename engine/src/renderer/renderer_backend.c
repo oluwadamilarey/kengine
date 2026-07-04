@@ -11,7 +11,7 @@ b8 renderer_backend_create(renderer_backend_type type, struct platform_state* pl
         out_renderer_backend->begin_frame = vulkan_renderer_backend_begin_frame;
         out_renderer_backend->end_frame = vulkan_renderer_backend_end_frame;
         out_renderer_backend->resized = vulkan_renderer_backend_on_resized;
-        return TRUE;
+        return true;
     }
 
     return false;

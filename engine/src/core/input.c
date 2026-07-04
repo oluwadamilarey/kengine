@@ -26,7 +26,7 @@ static input_state state = {};
 
 void input_initialize() {
     kzero_memory(&state, sizeof(input_state));
-    initialized = TRUE;
+    initialized = true;
     KINFO("Input subsystem initialized.");
 }
 
@@ -122,7 +122,7 @@ b8 input_is_key_down(keys key) {
     if (!initialized) {
         return false;
     }
-    return state.keyboard_current.keys[key] == TRUE;
+    return state.keyboard_current.keys[key] == true;
 }
 
 b8 input_is_key_up(keys key) {
@@ -136,7 +136,7 @@ b8 input_was_key_down(keys key) {
     if (!initialized) {
         return false;
     }
-    return state.keyboard_previous.keys[key] == TRUE;
+    return state.keyboard_previous.keys[key] == true;
 }
 
 b8 input_was_key_up(keys key) {
@@ -151,7 +151,7 @@ b8 input_is_button_down(buttons button) {
     if (!initialized) {
         return false;
     }
-    return state.mouse_current.buttons[button] == TRUE;
+    return state.mouse_current.buttons[button] == true;
 }
 
 b8 input_is_button_up(buttons button) {

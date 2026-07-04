@@ -4,14 +4,20 @@ OBJ_DIR := obj
 ASSEMBLY := engine
 EXTENSION := .dylib
 COMPILER_FLAGS := -g -fdeclspec -fvisibility=hidden -ObjC
+ifndef VULKAN_SDK
+$(error VULKAN_SDK is not set. Export it before building (e.g. export VULKAN_SDK=$$HOME/VulkanSDK/1.4.350.0/macOS))
+endif
+# Accept either VULKAN_SDK=<version>/macOS or VULKAN_SDK=<version>.
+VULKAN_INCLUDE_DIR := $(if $(wildcard $(VULKAN_SDK)/include),$(VULKAN_SDK)/include,$(VULKAN_SDK)/macOS/include)
+VULKAN_LIB_DIR := $(if $(wildcard $(VULKAN_SDK)/lib),$(VULKAN_SDK)/lib,$(VULKAN_SDK)/macOS/lib)
 # $(VULKAN_SDK)/include MUST precede all system paths so vulkan_metal.h
 # from MoltenVK is found instead of a system Vulkan install that lacks it.
-INCLUDE_FLAGS := -Iengine/src -I$(VULKAN_SDK)/include
+INCLUDE_FLAGS := -Iengine/src -I$(VULKAN_INCLUDE_DIR)
 LINKER_FLAGS := -g -shared \
 	-install_name @rpath/lib$(ASSEMBLY)$(EXTENSION) \
 	-lvulkan \
-	-L$(VULKAN_SDK)/lib \
-	-rpath $(VULKAN_SDK)/lib \
+	-L$(VULKAN_LIB_DIR) \
+	-rpath $(VULKAN_LIB_DIR) \
 	-framework Cocoa \
 	-framework QuartzCore \
 	-framework Metal

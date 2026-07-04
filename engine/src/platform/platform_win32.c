@@ -116,7 +116,7 @@ b8 platform_startup(
     clock_frequency = 1.0 / (f64)frequency.QuadPart;
     QueryPerformanceCounter(&start_time);
 
-    return TRUE;
+    return true;
 }
 
 void platform_shutdown(platform_state* plat_state) {
@@ -136,7 +136,7 @@ b8 platform_pump_messages(platform_state* plat_state) {
         DispatchMessageA(&message);
     }
 
-    return TRUE;
+    return true;
 }
 
 void* platform_allocate(u64 size, b8 aligned) {
@@ -214,7 +214,7 @@ b8 platform_create_vulkan_surface(
         return false;
     }
 
-    return TRUE;
+    return true;
 }
 
 LRESULT CALLBACK win32_process_message(HWND hwnd, u32 msg, WPARAM w_param, LPARAM l_param) {

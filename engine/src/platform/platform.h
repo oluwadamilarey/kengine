@@ -3,6 +3,7 @@
 #include "defines.h"
 #include <vulkan/vulkan.h>
 #include "renderer/vulkan/vulkan_types.inl"
+
 typedef struct platform_state {
     void* internal_state;
 } platform_state;

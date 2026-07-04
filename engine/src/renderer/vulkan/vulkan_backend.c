@@ -131,7 +131,7 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
         b8 found = false;
         for (u32 j = 0; j < available_layer_count; ++j) {
             if (strings_equal(required_validation_layer_names[i], available_layers[j].layerName)) {
-                found = TRUE;
+                found = true;
                 KINFO("Found.");
                 break;
             }
@@ -220,7 +220,7 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
         // Create the fence in a signaled state, indicating that the first frame has already been "rendered".
         // This will prevent the application from waiting indefinitely for the first frame to render since it
         // cannot be rendered until a frame is "rendered" before it.
-        vulkan_fence_create(&context, TRUE, &context.in_flight_fences[i]);
+        vulkan_fence_create(&context, true, &context.in_flight_fences[i]);
     }
 
     for (u32 i = 0; i < context.swapchain.image_count; ++i) {
@@ -237,7 +237,7 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     }
 
     KINFO("Vulkan renderer initialized successfully.");
-    return TRUE;
+    return true;
 }
 
 void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
@@ -337,7 +337,7 @@ b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time
     if (context.recreating_swapchain) {
         VkResult result = vkDeviceWaitIdle(device->logical_device);
         if (!vulkan_result_is_success(result)) {
-            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle (1) failed: '%s'", vulkan_result_string(result, TRUE));
+            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle (1) failed: '%s'", vulkan_result_string(result, true));
             return false;
         }
         KINFO("Recreating swapchain, booting.");
@@ -348,7 +348,7 @@ b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time
     if (context.framebuffer_size_generation != context.framebuffer_size_last_generation) {
         VkResult result = vkDeviceWaitIdle(device->logical_device);
         if (!vulkan_result_is_success(result)) {
-            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle (2) failed: '%s'", vulkan_result_string(result, TRUE));
+            KERROR("vulkan_renderer_backend_begin_frame vkDeviceWaitIdle (2) failed: '%s'", vulkan_result_string(result, true));
             return false;
         }
 
@@ -415,7 +415,7 @@ b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time
         &context.main_renderpass,
         context.swapchain.framebuffers[context.image_index].handle);
 
-    return TRUE;
+    return true;
 }
 
 b8 vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time) {
@@ -468,7 +468,7 @@ b8 vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time) 
         &submit_info,
         context.in_flight_fences[context.current_frame].handle);
     if (result != VK_SUCCESS) {
-        KERROR("vkQueueSubmit failed with result: %s", vulkan_result_string(result, TRUE));
+        KERROR("vkQueueSubmit failed with result: %s", vulkan_result_string(result, true));
         return false;
     }
 
@@ -484,7 +484,7 @@ b8 vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time) 
         context.queue_complete_semaphores[context.image_index],
         context.image_index);
 
-    return TRUE;
+    return true;
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
@@ -544,7 +544,7 @@ void create_command_buffers(renderer_backend* backend) {
         vulkan_command_buffer_allocate(
             &context,
             context.device.graphics_command_pool,
-            TRUE,
+            true,
             &context.graphics_command_buffers[i]);
     }
 
@@ -588,7 +588,7 @@ void regenerate_framebuffers(renderer_backend* backend, vulkan_swapchain* swapch
  * @param backend  The renderer backend handle (threaded through to helpers
  *                 such as regenerate_framebuffers and create_command_buffers).
  *
- * @return TRUE   Recreation succeeded; caller should retry the frame.
+ * @return true   Recreation succeeded; caller should retry the frame.
  *         false  Bailed out early (already recreating, zero-size window,
  *                or a downstream Vulkan call failed).
  */
@@ -615,7 +615,7 @@ b8 recreate_swapchain(renderer_backend* backend) {
 
     /* Lock recreation. begin_frame will spin-bail (returning false each tick)
      * until this flag is cleared at the bottom of this function.          */
-    context.recreating_swapchain = TRUE;
+    context.recreating_swapchain = true;
 
     /* Drain the GPU before touching any resources it may still be reading.
      * vkDeviceWaitIdle is coarse but correct here — recreation is infrequent
@@ -706,7 +706,6 @@ b8 recreate_swapchain(renderer_backend* backend) {
      * last_generation == generation and skip the recreate branch.        */
     context.framebuffer_size_last_generation = context.framebuffer_size_generation;
 
-
     /* Patch renderpass render area to the new surface extents.
      * Origin stays at (0,0) — fullscreen blit, no sub-region rendering.  */
     context.main_renderpass.x = 0;
@@ -733,5 +732,5 @@ b8 recreate_swapchain(renderer_backend* backend) {
     /* Release the lock. begin_frame will now proceed normally next tick.  */
     context.recreating_swapchain = false;
 
-    return TRUE;
+    return true;
 }

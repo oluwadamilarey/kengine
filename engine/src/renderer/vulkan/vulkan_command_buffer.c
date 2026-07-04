@@ -82,7 +82,7 @@ void vulkan_command_buffer_allocate_and_begin_single_use(
     b8 is_primary,
     vulkan_command_buffer* out_command_buffer) {
     vulkan_command_buffer_allocate(context, command_pool, is_primary, out_command_buffer);
-    vulkan_command_buffer_begin(out_command_buffer, TRUE, false, false);
+    vulkan_command_buffer_begin(out_command_buffer, true, false, false);
 }
 
 // Convenience function for ending and freeing a single-use command buffer in one call.

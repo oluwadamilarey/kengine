@@ -130,7 +130,7 @@ b8 vulkan_device_create(vulkan_context* context) {
     b8 portability_subset_available = false;
     for (u32 i = 0; i < available_extension_count; ++i) {
         if (strings_equal(available_extensions[i].extensionName, "VK_KHR_portability_subset")) {
-            portability_subset_available = TRUE;
+            portability_subset_available = true;
             KINFO("VK_KHR_portability_subset extension detected (MoltenVK)");
             break;
         }
@@ -213,7 +213,7 @@ b8 vulkan_device_create(vulkan_context* context) {
     KINFO("  Present queue:  family %d, queue 0", context->device.present_queue_index);
     KINFO("  Transfer queue: family %d, queue 0", context->device.transfer_queue_index);
 
-    return TRUE;
+    return true;
 }
 
 void vulkan_device_query_swapchain_support(
@@ -326,7 +326,7 @@ b8 vulkan_device_detect_depth_format(
         if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
             device->depth_format = candidates[i];
             KINFO("Selected depth format: %d", device->depth_format);
-            return TRUE;
+            return true;
         }
     }
 
@@ -387,7 +387,9 @@ b8 select_physical_device(vulkan_context* context) {
         return false;
     }
 
-    VkPhysicalDevice physical_devices[physical_device_count];
+    const u32 max_device_count = 32;  // Arbitrary limit to prevent excessive memory usage
+
+    VkPhysicalDevice physical_devices[max_device_count];
     VK_CHECK(vkEnumeratePhysicalDevices(context->instance, &physical_device_count, physical_devices));
 
     for (u32 i = 0; i < physical_device_count; ++i) {
@@ -401,11 +403,11 @@ b8 select_physical_device(vulkan_context* context) {
         vkGetPhysicalDeviceMemoryProperties(physical_devices[i], &memory);
 
         vulkan_physical_device_requirements requirements = {};
-        requirements.graphics = TRUE;
-        requirements.present = TRUE;
-        requirements.compute = TRUE;
-        requirements.transfer = TRUE;
-        requirements.sampler_anisotropy = TRUE;
+        requirements.graphics = true;
+        requirements.present = true;
+        requirements.compute = true;
+        requirements.transfer = true;
+        requirements.sampler_anisotropy = true;
         requirements.discrete_gpu = false;
 
         const char* required_device_extensions[] = {
@@ -477,7 +479,7 @@ b8 select_physical_device(vulkan_context* context) {
             context->device.memory = memory;
 
             darray_destroy(requirements.device_extension_names);
-            return TRUE;  // Fix 5: Added explicit return on success
+            return true;  // Fix 5: Added explicit return on success
         }
 
         darray_destroy(requirements.device_extension_names);
@@ -672,7 +674,7 @@ b8 physical_device_meets_requirements(
 
             for (u32 j = 0; j < available_extension_count; ++j) {
                 if (strings_equal(required_ext, available_extensions[j].extensionName)) {
-                    found = TRUE;
+                    found = true;
                     KDEBUG("  Extension '%s' found", required_ext);
                     break;
                 }
@@ -700,5 +702,5 @@ b8 physical_device_meets_requirements(
     }
 
     KINFO("Device '%s' meets all requirements!", properties->deviceName);
-    return TRUE;
+    return true;
 }
