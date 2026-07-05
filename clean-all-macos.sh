@@ -14,4 +14,10 @@ if [ $? -ne 0 ]; then
     echo "Error cleaning testbed: $?" && exit 1
 fi
 
+
+make -f Makefile.tests.macos.mak clean
+if [ $? -ne 0 ]; then
+    echo "Error cleaning tests: $?" && exit 1
+fi
+
 echo "All assemblies cleaned successfully."

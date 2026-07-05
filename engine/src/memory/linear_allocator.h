@@ -1,0 +1,16 @@
+#pragma once
+
+#include "defines.h"
+
+typedef struct linear_allocator {
+    void* memory;
+    u64 total_size;
+    u64 allocated;
+    b8 owns_memory;
+} linear_allocator;
+
+KAPI void linear_allocator_create(u64 total_size, linear_allocator* out_allocator, void* memory);
+KAPI void linear_allocator_destroy(linear_allocator* allocator);
+
+KAPI void* linear_allocator_allocate(linear_allocator* allocator, u64 size);
+KAPI void linear_allocator_free_all(linear_allocator* allocator); 

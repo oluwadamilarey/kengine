@@ -1,5 +1,4 @@
 #include "kmath.h"
-#include "platform/platform.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -37,8 +36,7 @@ f32 kabs(f32 x) {
 
 i32 krandom() {
     if (!rand_seeded) {
-        u64 absolute_time = 0;
-        srand((u32)platform_get_absolute_time(&absolute_time));
+        srand((u32)time(0));
         rand_seeded = true;
     }
     return rand();
@@ -46,8 +44,7 @@ i32 krandom() {
 
 i32 krandom_in_range(i32 min, i32 max) {
     if (!rand_seeded) {
-        u64 absolute_time = 0;
-        srand((u32)platform_get_absolute_time(&absolute_time));
+        srand((u32)time(0));
         rand_seeded = true;
     }
     return (rand() % (max - min + 1)) + min;

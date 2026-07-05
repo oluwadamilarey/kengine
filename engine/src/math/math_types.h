@@ -1,7 +1,7 @@
 #pragma once
 #include "defines.h"
 
-typedef struct vec2 {
+typedef union vec2_u {
     f32 elements[2];
     struct {
         union {
@@ -12,8 +12,22 @@ typedef struct vec2 {
             // second element
             f32 y, g, t, v;
         };
+    };
+} vec2;
+
+typedef union vec3_u {
+    f32 elements[3];
+    struct {
         union {
-            // the third element, for padding to 16 bytes (128 bits) for SIMD alignment. Not used for storage, but can be used for calculations if desired.
+            // first element
+            f32 x, r, s, u;
+        };
+        union {
+            // second element
+            f32 y, g, t, v;
+        };
+        union {
+            // third element
             f32 z, b, p, w;
         };
     };

@@ -33,4 +33,22 @@ if [ $? -ne 0 ]; then
     echo "Error building testbed: $?" && exit 1
 fi
 
+pushd testbed
+source build.sh
+popd
+ERRORLEVEL=$?
+if [ $ERRORLEVEL -ne 0 ]
+then
+echo "Error:"$ERRORLEVEL && exit
+fi
+
+pushd tests
+source build.sh
+popd
+ERRORLEVEL=$?
+if [ $ERRORLEVEL -ne 0 ]
+then
+echo "Error:"$ERRORLEVEL && exit
+fi
+
 echo "All assemblies built successfully."

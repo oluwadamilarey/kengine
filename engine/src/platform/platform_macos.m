@@ -338,6 +338,7 @@ void platform_console_write(const char *message, u8 colour) {
     printf("\033[%sm%s\033[0m", codes[colour], message);
     fflush(stdout);
 }
+
 void platform_console_write_error(const char *message, u8 colour) {
     static const char *codes[] = {"0;41","1;31","1;33","1;32","1;34","1;30"};
     fprintf(stderr, "\033[%sm%s\033[0m", codes[colour], message);

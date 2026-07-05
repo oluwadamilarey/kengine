@@ -6,11 +6,27 @@
 #include <string.h>
 #include <Kernel/mach/boolean.h>
 
-KAPI b8 initialize_logging() {
+typedef struct logger_system_state {
+    log_level current_level;
+    b8 initialized;
+} logger_system_state;
+
+KAPI b8 initialize_logging(u64* memory_requirement, void* state) {
+    *memory_requirement = sizeof(logger_system_state);
+    if(state = 0){
+        return;
+    }
+
+    logger_system_state* state_ptr = (logger_system_state*)state;
+    state_ptr->initialized = true;
     return true;
 };
 
-void shutdown_logging() {
+void shutdown_logging(u64* memory_requirement, void* state) {
+    logger_system_state* logger_state = (logger_system_state*)state;
+    if (logger_state) {
+        logger_state->initialized = false;
+    }
 };
 
 KAPI void log_output(log_level level, const char* message, ...) {

@@ -22,8 +22,22 @@ typedef enum log_level {
     LOG_LEVEL_TRACE = 5,
 } log_level;
 
-b8 initialize_logging();
-void shutdown_logging();
+/**
+ * @brief Shuts down the logging system
+ *
+ * @param memory_requirement
+ * @param state
+ */
+void shutdown_logging(u64* memory_requirement, void* state);
+
+/**
+ * @brief Initializes the logging system
+ *
+ * @param memory_requirement
+ * @param state
+ * @return KAPI
+ */
+KAPI b8 initialize_logging(u64* memory_requirement, void* state);
 
 KAPI void log_output(log_level level, const char* message, ...);
 

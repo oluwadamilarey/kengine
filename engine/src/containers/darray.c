@@ -71,7 +71,7 @@ void* _darray_pop_at(void* array, u64 index, void* dest) {
     u64 length = darray_length(array);
     u64 stride = darray_stride(array);
     if (index >= length) {
-        KERROR("Index outside the bounds of this array! Length: %i, index: %index", length, index);
+        KERROR("Index outside the bounds of this array! Length: %i, index: %i", length, index);
         return array;
     }
 

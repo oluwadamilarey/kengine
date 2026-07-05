@@ -9,53 +9,64 @@
 #include "core/input.h"
 #include "core/clock.h"
 #include "renderer/renderer_frontend.h"
+#include "memory/linear_allocator.h"
 
 typedef struct application_state {
     game* game_inst;
     b8 is_running;
     b8 is_suspended;
     platform_state platform;
+
     i16 width;
     i16 height;
     f64 last_time;
     clock clock;
+
+    linear_allocator systems_allocator;
+    u64 logging_system_memory_requirement;
+    void* logging_system_state;
 } application_state;
 
-static b8 initialized = false;
-static application_state app_state;
+static application_state* app_state;
 
 b8 application_create(game* game_inst) {
-    if (initialized) {
+    if (game_inst->application_state) {
         KERROR("application_create called more than once.");
         return false;
     }
 
-    app_state.game_inst = game_inst;
-    app_state.width = game_inst->app_config.start_width;
-    app_state.height = game_inst->app_config.start_height;
+    game_inst->application_state = kallocate(sizeof(application_state), MEMORY_TAG_APPLICATION);
+    app_state = (application_state*)game_inst->application_state;
+    app_state->game_inst = game_inst;
+
+    app_state->width = game_inst->app_config.start_width;
+    app_state->height = game_inst->app_config.start_height;
+
+    u64 systems_allocator_size = 1024 * 1024 * 64;  // 10 MB
+    if (!linear_allocator_initialize(&app_state->systems_allocator, systems_allocator_size)) {
+        KFATAL("Failed to initialize systems allocator.");
+        return false;
+    }
 
     // Initialize subsystems.
-    initialize_logging();
+    initialize_logging(&app_state->logging_system_memory_requirement, &app_state->logging_system_state);
+    app_state->logging_system_state = linear_allocator_allocate(&app_state->systems_allocator, app_state->logging_system_memory_requirement);
+    if (!initialize_logging(&app_state->logging_system_memory_requirement, app_state->logging_system_state)) {
+        KFATAL("Failed to initialize logging system.");
+        return false;
+    }
     input_initialize();
-
-    // TODO: Remove this
-    KFATAL("A test message: %f", 3.14f);
-    KERROR("A test message: %f", 3.14f);
-    KWARN("A test message: %f", 3.14f);
-    KINFO("A test message: %f", 3.14f);
-    KDEBUG("A test message: %f", 3.14f);
-    KDEBUG("A test message: %f", 3.14f);
 
     // event_shutdown();
     if (!event_initialize()) {
         KERROR("Event system failed initialization. Application cannot continue.");
         return false;
     }
-    app_state.is_running = true;
-    app_state.is_suspended = false;
+    app_state->is_running = true;
+    app_state->is_suspended = false;
 
     if (!platform_startup(
-            &app_state.platform,
+            &app_state->platform,
             game_inst->app_config.name,
             game_inst->app_config.start_pos_x,
             game_inst->app_config.start_pos_y,
@@ -65,55 +76,53 @@ b8 application_create(game* game_inst) {
     }
 
     // Renderer startup
-    if (!renderer_initialize(game_inst->app_config.name, &app_state.platform)) {
+    if (!renderer_initialize(game_inst->app_config.name, &app_state->platform)) {
         KFATAL("Failed to initialize renderer. Aborting application.");
         return false;
     }
     // Initialize clock system with platform state
-    clock_set_platform_state(&app_state.platform);
+    clock_set_platform_state(&app_state->platform);
     // Initialize the game.
-    if (!app_state.game_inst->initialize(app_state.game_inst)) {
+    if (!app_state->game_inst->initialize(app_state->game_inst)) {
         KFATAL("Game failed to initialize.");
         return false;
     }
 
-    app_state.game_inst->on_resize(app_state.game_inst, app_state.width, app_state.height);
-
-    initialized = true;
+    app_state->game_inst->on_resize(app_state->game_inst, app_state->width, app_state->height);
 
     return true;
 }
 
 b8 application_run() {
-    clock_start(&app_state.clock);
-    clock_update(&app_state.clock);
-    app_state.last_time = app_state.clock.elapsed;
+    clock_start(&app_state->clock);
+    clock_update(&app_state->clock);
+    app_state->last_time = app_state->clock.elapsed;
     f64 running_time = 0;
     u8 frame_count = 0;
     f64 target_frame_seconds = 1.0f / 60;
 
     KINFO(get_memory_usage_str());
-    while (app_state.is_running) {
-        if (!platform_pump_messages(&app_state.platform)) {
-            app_state.is_running = false;
+    while (app_state->is_running) {
+        if (!platform_pump_messages(&app_state->platform)) {
+            app_state->is_running = false;
         }
 
-        if (!app_state.is_suspended) {
-            clock_update(&app_state.clock);
-            f64 current_time = app_state.clock.elapsed;
-            f64 delta = (current_time - app_state.last_time);
-            f64 frame_start_time = clock_get_absolute_time(&app_state.platform);
+        if (!app_state->is_suspended) {
+            clock_update(&app_state->clock);
+            f64 current_time = app_state->clock.elapsed;
+            f64 delta = (current_time - app_state->last_time);
+            f64 frame_start_time = clock_get_absolute_time(&app_state->platform);
 
-            if (!app_state.game_inst->update(app_state.game_inst, (f32)delta)) {
+            if (!app_state->game_inst->update(app_state->game_inst, (f32)delta)) {
                 KFATAL("Game update failed, shutting down.");
-                app_state.is_running = false;
+                app_state->is_running = false;
                 break;
             }
 
             // Call the game's render routine.
-            if (!app_state.game_inst->render(app_state.game_inst, (f32)delta)) {
+            if (!app_state->game_inst->render(app_state->game_inst, (f32)delta)) {
                 KFATAL("Game render failed, shutting down.");
-                app_state.is_running = false;
+                app_state->is_running = false;
                 break;
             }
 
@@ -123,7 +132,7 @@ b8 application_run() {
             renderer_draw_frame(&packet);
 
             // Figure out how long the frame took and, if below
-            f64 frame_end_time = clock_get_absolute_time(&app_state.platform);
+            f64 frame_end_time = clock_get_absolute_time(&app_state->platform);
             f64 frame_elapsed_time = frame_end_time - frame_start_time;
             running_time += frame_elapsed_time;
             f64 remaining_seconds = target_frame_seconds - frame_elapsed_time;
@@ -146,42 +155,44 @@ b8 application_run() {
             // this frame ends.
             input_update(delta);
             // Update last time
-            app_state.last_time = current_time;
+            app_state->last_time = current_time;
         }
     }
 
-    app_state.is_running = false;
+    app_state->is_running = false;
 
     // Shutdown event system.
     event_unregister(EVENT_CODE_APPLICATION_QUIT, 0, application_on_event);
     event_unregister(EVENT_CODE_KEY_PRESSED, 0, application_on_key);
     event_unregister(EVENT_CODE_KEY_RELEASED, 0, application_on_key);
     event_shutdown();
+    logging_shutdown(&app_state->logging_system_state);
     input_shutdown();
     renderer_shutdown();
-    platform_shutdown(&app_state.platform);
+
+    platform_shutdown(&app_state->platform);
 
     return true;
 }
 
 void application_get_framebuffer_size(u32* width, u32* height) {
-    *width = app_state.width;
-    *height = app_state.height;
+    *width = app_state->width;
+    *height = app_state->height;
 }
 
 b8 application_on_event(u16 code, void* sender, void* listener_inst, event_context context) {
     switch (code) {
         case EVENT_CODE_APPLICATION_QUIT: {
-            app_state.is_running = false;
+            app_state->is_running = false;
             KINFO("EVENT_CODE_APPLICATION_QUIT recieved, shutting down.\n");
             return true;
         }
         // case EVENT_CODE_APPLICATION_SUSPENDED: {
-        //     app_state.is_suspended = true;
+        //     app_state->is_suspended = true;
         //     return true;
         // }
         // case EVENT_CODE_APPLICATION_RESUMED: {
-        //     app_state.is_suspended = false;
+        //     app_state->is_suspended = false;
         //     return true;
         // }
         default: {

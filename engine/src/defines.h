@@ -12,6 +12,7 @@
  */
 #pragma once
 #include <stdbool.h>
+#include <stdalign.h>
 
 // Unsigned int types.
 
@@ -290,15 +291,6 @@ KINLINE krange get_aligned_range(u64 offset, u64 size, u64 granularity) {
 
 #define KMIN(x, y) (x < y ? x : y)
 #define KMAX(x, y) (x > y ? x : y)
-
-// Inlining
-#ifdef _MSC_VER
-#define KINLINE __forceinline
-#define KNOINLINE __declspec(noinline)
-#else
-#define KINLINE static inline
-#define KNOINLINE
-#endif
 
 /**
  * @brief Indicates if the provided flag is set in the given flags int.

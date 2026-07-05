@@ -25,4 +25,7 @@ typedef struct game {
 
     // Game-specific game state. Created and managed by the game.
     void* state;
+
+    // application-state pointer. This is set by the application and should not be modified by the game.
+    void* application_state;
 } game;
