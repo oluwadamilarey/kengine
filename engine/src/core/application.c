@@ -25,9 +25,17 @@ typedef struct application_state {
     linear_allocator systems_allocator;
     u64 logging_system_memory_requirement;
     void* logging_system_state;
+
+    u64 memory_system_memory_requirement;
+    void* memory_system_state;
 } application_state;
 
 static application_state* app_state;
+
+// Event handlers
+b8 application_on_event(u16 code, void* sender, void* listener_inst, event_context context);
+b8 application_on_key(u16 code, void* sender, void* listener_inst, event_context context);
+b8 application_on_resized(u16 code, void* sender, void* listener_inst, event_context context);
 
 b8 application_create(game* game_inst) {
     if (game_inst->application_state) {
@@ -38,18 +46,24 @@ b8 application_create(game* game_inst) {
     game_inst->application_state = kallocate(sizeof(application_state), MEMORY_TAG_APPLICATION);
     app_state = (application_state*)game_inst->application_state;
     app_state->game_inst = game_inst;
+    app_state->is_running = false;
+    app_state->is_suspended = false;
 
     app_state->width = game_inst->app_config.start_width;
     app_state->height = game_inst->app_config.start_height;
 
-    u64 systems_allocator_size = 1024 * 1024 * 64;  // 10 MB
-    if (!linear_allocator_initialize(&app_state->systems_allocator, systems_allocator_size)) {
-        KFATAL("Failed to initialize systems allocator.");
-        return false;
-    }
+    u64 systems_allocator_total_size = 64 * 1024 * 1024;  // 10 MB
+    linear_allocator_create(systems_allocator_total_size, 0, &app_state->systems_allocator);
 
     // Initialize subsystems.
-    initialize_logging(&app_state->logging_system_memory_requirement, &app_state->logging_system_state);
+
+    // inttialize memory system
+    initialize_memory(&app_state->memory_system_memory_requirement, 0);
+    app_state->memory_system_state = linear_allocator_allocate(&app_state->systems_allocator, app_state->memory_system_memory_requirement);
+    initialize_memory(&app_state->memory_system_memory_requirement, app_state->memory_system_state);
+
+    // Initialize logging system
+    initialize_logging(&app_state->logging_system_memory_requirement, 0);
     app_state->logging_system_state = linear_allocator_allocate(&app_state->systems_allocator, app_state->logging_system_memory_requirement);
     if (!initialize_logging(&app_state->logging_system_memory_requirement, app_state->logging_system_state)) {
         KFATAL("Failed to initialize logging system.");
@@ -62,8 +76,10 @@ b8 application_create(game* game_inst) {
         KERROR("Event system failed initialization. Application cannot continue.");
         return false;
     }
-    app_state->is_running = true;
-    app_state->is_suspended = false;
+    event_register(EVENT_CODE_APPLICATION_QUIT, 0, application_on_event);
+    event_register(EVENT_CODE_KEY_PRESSED, 0, application_on_key);
+    event_register(EVENT_CODE_KEY_RELEASED, 0, application_on_key);
+    event_register(EVENT_CODE_RESIZED, 0, application_on_resized);
 
     if (!platform_startup(
             &app_state->platform,
@@ -100,6 +116,8 @@ b8 application_run() {
     f64 running_time = 0;
     u8 frame_count = 0;
     f64 target_frame_seconds = 1.0f / 60;
+
+    app_state->is_running = true;
 
     KINFO(get_memory_usage_str());
     while (app_state->is_running) {
@@ -166,12 +184,11 @@ b8 application_run() {
     event_unregister(EVENT_CODE_KEY_PRESSED, 0, application_on_key);
     event_unregister(EVENT_CODE_KEY_RELEASED, 0, application_on_key);
     event_shutdown();
-    logging_shutdown(&app_state->logging_system_state);
     input_shutdown();
     renderer_shutdown();
 
     platform_shutdown(&app_state->platform);
-
+    shutdown_memory(&app_state->memory_system_state);
     return true;
 }
 
@@ -226,5 +243,37 @@ b8 application_on_key(u16 code, void* sender, void* listener_inst, event_context
             KDEBUG("'%c' key released in window.", key_code);
         }
     }
+    return false;
+}
+
+b8 application_on_resized(u16 code, void* sender, void* listener_inst, event_context context) {
+    if (code == EVENT_CODE_RESIZED) {
+        u16 width = context.data.u16[0];
+        u16 height = context.data.u16[1];
+
+        // Check if different. If so, trigger a resize event.
+        if (width != app_state->width || height != app_state->height) {
+            app_state->width = width;
+            app_state->height = height;
+
+            KDEBUG("Window resize: %i, %i", width, height);
+
+            // Handle minimization
+            if (width == 0 || height == 0) {
+                KINFO("Window minimized, suspending application.");
+                app_state->is_suspended = true;
+                return true;
+            } else {
+                if (app_state->is_suspended) {
+                    KINFO("Window restored, resuming application.");
+                    app_state->is_suspended = false;
+                }
+                app_state->game_inst->on_resize(app_state->game_inst, width, height);
+                renderer_on_resized(width, height);
+            }
+        }
+    }
+
+    // Event purposely not handled to allow other listeners to get this.
     return false;
 }

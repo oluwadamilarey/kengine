@@ -9,8 +9,10 @@ typedef struct linear_allocator {
     b8 owns_memory;
 } linear_allocator;
 
-KAPI void linear_allocator_create(u64 total_size, linear_allocator* out_allocator, void* memory);
+KAPI void linear_allocator_create(u64 total_size, void* memory, linear_allocator* out_allocator);
 KAPI void linear_allocator_destroy(linear_allocator* allocator);
 
 KAPI void* linear_allocator_allocate(linear_allocator* allocator, u64 size);
-KAPI void linear_allocator_free_all(linear_allocator* allocator); 
+KAPI void linear_allocator_free_all(linear_allocator* allocator);
+
+KAPI void linear_allocator_initialize(linear_allocator* allocator, u64 total_size);

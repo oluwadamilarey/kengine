@@ -95,9 +95,7 @@ void vulkan_command_buffer_end_and_free_single_use(
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &command_buffer->handle;
     VK_CHECK(vkQueueSubmit(context->device.graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
-
     VK_CHECK(vkQueueWaitIdle(context->device.graphics_queue));
-
     // Safe to free now — GPU is idle, handle is still valid until here
     vulkan_command_buffer_free(context, command_pool, command_buffer);
 }

@@ -117,6 +117,19 @@ typedef struct vulkan_device {
     VkFormat depth_format;
 } vulkan_device;
 
+typedef struct vulkan_shader_stage {
+    VkShaderModuleCreateInfo create_info;
+    VkShaderModule handle;
+    VkPipelineShaderStageCreateInfo shader_stage_create_info;
+} vulkan_shader_stage;
+
+#define OBJECT_SHADER_STAGE_COUNT 2
+
+typedef struct vulkan_object_shader {
+    // vertex , fragment
+    vulkan_shader_stage stages[OBJECT_SHADER_STAGE_COUNT];
+} vulkan_object_shader;
+
 typedef struct vulkan_context {
     // The framebuffer's current width.
     u32 framebuffer_width;

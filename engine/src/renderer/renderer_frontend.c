@@ -27,6 +27,14 @@ void renderer_shutdown() {
     kfree(backend, sizeof(renderer_backend), MEMORY_TAG_RENDERER);
 }
 
+void renderer_on_resized(u16 width, u16 height) {
+    if (backend) {
+        backend->resized(backend, width, height);
+    } else {
+        KWARN("renderer backend does not exist to accept resize: %i %i", width, height);
+    }
+}
+
 b8 renderer_begin_frame(f32 delta_time) {
     return backend->begin_frame(backend, delta_time);
 }

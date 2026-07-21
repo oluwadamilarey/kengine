@@ -3,7 +3,7 @@
 #include "core/kmemory.h"
 #include "core/logger.h"
 
-void linear_allocator_create(u64 total_size, linear_allocator* out_allocator, void* memory) {
+void linear_allocator_create(u64 total_size, void* memory, linear_allocator* out_allocator) {
     if (out_allocator) {
         out_allocator->memory = memory;
         out_allocator->total_size = total_size;
@@ -15,6 +15,15 @@ void linear_allocator_create(u64 total_size, linear_allocator* out_allocator, vo
         } else {
             out_allocator->memory = kallocate(total_size, MEMORY_TAG_ARRAY);
         }
+    }
+}
+
+void linear_allocator_initialize(linear_allocator* allocator, u64 total_size) {
+    if (allocator) {
+        allocator->total_size = total_size;
+        allocator->allocated = 0;
+        allocator->owns_memory = true;
+        allocator->memory = kallocate(total_size, MEMORY_TAG_ARRAY);
     }
 }
 

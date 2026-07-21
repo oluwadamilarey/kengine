@@ -181,7 +181,7 @@ b8 vulkan_device_create(vulkan_context* context) {
     vkGetDeviceQueue(
         context->device.logical_device,
         context->device.graphics_queue_index,
-        0,  // Queue index within the family
+        0,
         &context->device.graphics_queue);
 
     vkGetDeviceQueue(
@@ -339,6 +339,16 @@ void vulkan_device_destroy(vulkan_context* context) {
     context->device.graphics_queue = 0;
     context->device.present_queue = 0;
     context->device.transfer_queue = 0;
+
+    // Destroy command pool
+    KINFO("Destroying command pool...");
+    if (context->device.graphics_command_pool) {
+        vkDestroyCommandPool(
+            context->device.logical_device,
+            context->device.graphics_command_pool,
+            context->allocator);
+        context->device.graphics_command_pool = 0;
+    }
 
     // Destroy logical device
     KINFO("Destroying logical device...");
