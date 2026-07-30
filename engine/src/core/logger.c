@@ -6,6 +6,7 @@
 #include <string.h>
 #include <Kernel/mach/boolean.h>
 #include "platform/filesystem.h"
+#include "core/kmemory.h"
 
 typedef struct logger_system_state {
     file_handle log_file_handle;
@@ -29,14 +30,11 @@ b8 initialize_logging(u64* memory_requirement, void* state) {
     }
     state_ptr = state;
 
-    // state_ptr->initialized = true;
-    // create new/wipe existing log file, then open it
     if (!filesystem_open("console.log", FILE_MODE_WRITE, false, &state_ptr->log_file_handle)) {
         platform_console_write_error("ERROR: Unable to open console.log for writing.", LOG_LEVEL_ERROR);
         return false;
     }
 
-    // TODO: Remove this
     KFATAL("A test message: %f", 3.14f);
     KERROR("A test message: %f", 3.14f);
     KWARN("A test message: %f", 3.14f);
@@ -44,7 +42,6 @@ b8 initialize_logging(u64* memory_requirement, void* state) {
     KDEBUG("A test message: %f", 3.14f);
     KTRACE("A test message: %f", 3.14f);
 
-    // TODO: create log file.
     return true;
 }
 
@@ -60,7 +57,8 @@ KAPI void log_output(log_level level, const char* message, ...) {
     // technically inposes a 32k character limit on a single log entry , but..
     // don't do that
     char out_message[32000];
-    memset(out_message, 0, sizeof(out_message));
+    // memset(out_message, 0, sizeof(out_message));
+    kzero_memory(out_message, sizeof(out_message));
 
     // format original message.
     // Note: Oddly enough, MS's headers overrides the C/Clang va_list type with a "typedef char* va_list" in some

@@ -10,7 +10,7 @@
 
 // void vulkan_object_shader_use(vulkan_object_shaders* shaders, vulkan_context* context);
 
-b8 vulkan_object_shaders_create(vulkan_context* context, vulkan_object_shader* out_shader);
+b8 vulkan_object_shader_create(vulkan_context* context, vulkan_object_shader* out_shader);
 
 void vulkan_object_shader_destroy(vulkan_context* context, struct vulkan_object_shader* shader);
 

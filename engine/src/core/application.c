@@ -52,7 +52,7 @@ b8 application_create(game* game_inst) {
     app_state->width = game_inst->app_config.start_width;
     app_state->height = game_inst->app_config.start_height;
 
-    u64 systems_allocator_total_size = 64 * 1024 * 1024;  // 10 MB
+    u64 systems_allocator_total_size = 64 * 1024 * 1024;
     linear_allocator_create(systems_allocator_total_size, 0, &app_state->systems_allocator);
 
     // Initialize subsystems.

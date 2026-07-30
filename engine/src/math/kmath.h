@@ -728,6 +728,23 @@ KINLINE mat4 mat4_identity() {
 }
 
 /**
+ * @brief Represents a single vertex in 3D space, matching the layout
+ * expected by the graphics pipeline's vertex input attributes.
+ */
+typedef struct vertex_3d {
+    /** @brief The position of the vertex. */
+    vec3 position;
+    /** @brief The normal of the vertex. */
+    vec3 normal;
+    /** @brief The texture coordinate of the vertex. */
+    vec2 texcoord;
+    /** @brief The colour of the vertex. */
+    vec4 colour;
+    /** @brief The tangent of the vertex, used for normal mapping. */
+    vec4 tangent;
+} vertex_3d;
+
+/**
  * @brief Returns the result of multiplying matrix_0 and matrix_1.
  *
  * @param matrix_0 The first matrix to be multiplied.

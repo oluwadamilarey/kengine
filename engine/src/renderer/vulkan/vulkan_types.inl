@@ -24,6 +24,15 @@ typedef struct vulkan_image {
     u32 height;
 } vulkan_image;
 
+typedef struct vulkan_pipeline {
+    /** @brief The internal pipeline handle. */
+    VkPipeline handle;
+    /** @brief The pipeline layout. */
+    VkPipelineLayout pipeline_layout;
+    /** @brief Indicates the topology types used by this pipeline. See primitive_topology_type.*/
+    // primitive_topology_type_bits supported_topology_types;
+} vulkan_pipeline;
+
 typedef struct vulkan_fence {
     VkFence handle;
     b8 is_signaled;
