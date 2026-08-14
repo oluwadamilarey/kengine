@@ -3,6 +3,7 @@
 #include "renderer/vulkan/vulkan_types.inl"
 
 #include "renderer/renderer_types.inl"
+#include "renderer/vulkan/vulkan_pipeline.h"
 
 // b8 vulkan_object_shader_create(vulkan_object_shaders* shaders, vulkan_context* context, const char* vertex_shader_path, const char* fragment_shader_path);
 

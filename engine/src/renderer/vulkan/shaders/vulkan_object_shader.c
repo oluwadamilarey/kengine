@@ -1,7 +1,11 @@
 #include "vulkan_object_shader.h"
 #include "core/logger.h"
+#include "math/math_types.h"
 #include "renderer/vulkan/vulkan_shader_utils.h"
+#include "renderer/vulkan/vulkan_pipeline.h"
+#include "core/kmemory.h"
 
+#include "math/kmath.h"
 #define BUILTIN_SHADER_NAME_OBJECT "Builtin.ObjectShader"
 
 b8 vulkan_object_shader_create(vulkan_context* context, vulkan_object_shader* out_shader) {
@@ -39,10 +43,50 @@ b8 vulkan_object_shader_create(vulkan_context* context, vulkan_object_shader* ou
     VkFormat formats[attribute_count] = {
         VK_FORMAT_R32G32B32_SFLOAT};
 
+    u64 sizes[attribute_count] = {
+        sizeof(vec3)};
+
+    for (u32 i = 0; i < attribute_count; ++i) {
+        attribute_description[i].location = i;
+        attribute_description[i].binding = 0;
+        attribute_description[i].format = formats[i];
+        attribute_description[i].offset = offset;
+        offset += sizes[i];
+    }
+
+    // stages
+    // Note: should match the number of shader->stages
+    VkPipelineShaderStageCreateInfo stage_create_infos[OBJECT_SHADER_STAGE_COUNT];
+    kzero_memory(stage_create_infos, sizeof(stage_create_infos));
+    for (u32 i = 0; i < OBJECT_SHADER_STAGE_COUNT; ++i) {
+        stage_create_infos[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stage_create_infos[i].stage = stage_types[i];
+        stage_create_infos[i].module = out_shader->stages[i].handle;
+        stage_create_infos[i].pName = "main";
+    }
+
+    if (!vulkan_graphics_pipeline_create(
+            context,
+            &context->main_renderpass,
+            attribute_count,
+            attribute_description,
+            0,
+            0,
+            OBJECT_SHADER_STAGE_COUNT,
+            stage_create_infos,
+            viewport,
+            scissor,
+            false,
+            &out_shader->pipeline)) {
+        KERROR("Unable to create pipeline for '%s'.", BUILTIN_SHADER_NAME_OBJECT);
+        return false;
+    }
+
     return true;
 };
 
 void vulkan_object_shader_destroy(vulkan_context* context, struct vulkan_object_shader* shader) {
+    vulkan_pipeline_destroy(context, &shader->pipeline);
     // destroy shader modules
     for (u32 i = 0; i < OBJECT_SHADER_STAGE_COUNT; ++i) {
         vkDestroyShaderModule(context->device.logical_device, shader->stages[i].handle, context->allocator);

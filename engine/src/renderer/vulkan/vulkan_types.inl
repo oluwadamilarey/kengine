@@ -91,9 +91,19 @@ typedef enum vulkan_command_buffer_state {
 
 typedef struct vulkan_command_buffer {
     VkCommandBuffer handle;
-    // The current state of the command buffer.
     vulkan_command_buffer_state state;
 } vulkan_command_buffer;
+
+typedef struct vulkan_buffer {
+    u64 total_size;
+    VkBuffer handle;
+    VkBufferUsageFlagBits usage;
+    b8 is_locked;
+    VkDeviceMemory memory;
+    i32 memory_index;
+    b8 bind_on_create;
+    u32 memory_property_flags;
+} vulkan_buffer;
 
 typedef struct vulkan_swapchain_support_info {
     VkSurfaceCapabilitiesKHR capabilities;
@@ -137,6 +147,7 @@ typedef struct vulkan_shader_stage {
 typedef struct vulkan_object_shader {
     // vertex , fragment
     vulkan_shader_stage stages[OBJECT_SHADER_STAGE_COUNT];
+    vulkan_pipeline pipeline;
 } vulkan_object_shader;
 
 typedef struct vulkan_context {
@@ -159,6 +170,9 @@ typedef struct vulkan_context {
     vulkan_swapchain swapchain;
     vulkan_renderpass main_renderpass;
 
+    vulkan_buffer object_vertex_buffer;
+    vulkan_buffer object_index_buffer;
+
     // darray of command buffers, one for each frame in flight.
     vulkan_command_buffer* graphics_command_buffers;
     // darray
@@ -166,12 +180,20 @@ typedef struct vulkan_context {
     // darray
     VkSemaphore* queue_complete_semaphores;
     u32 in_flight_fence_count;
+
     vulkan_fence* in_flight_fences;
     vulkan_fence** images_in_flight;
-    // darray
+
     // VkFence* in_flight_fences;
     u32 image_index;
     u32 current_frame;
+
+    vulkan_object_shader object_shader;
+
+    u64 geometry_vertex_offset;
+    u64 geometry_index_offset;
+
     b8 recreating_swapchain;
+
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
 } vulkan_context;

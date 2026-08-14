@@ -7,6 +7,8 @@
 #include <Kernel/mach/boolean.h>
 #include "platform/filesystem.h"
 #include "core/kmemory.h"
+#include "core/kstring.h"
+#include "platform/platform.h"
 
 typedef struct logger_system_state {
     file_handle log_file_handle;
@@ -81,6 +83,6 @@ KAPI void log_output(log_level level, const char* message, ...) {
     append_to_log_file(out_message);
 };
 
-void report_assertion_failure(const char* expression, const char* message, const char* file, i32 line) {
-    log_output(LOG_LEVEL_FATAL, "Assertion Failure: %s, in file: %s, line: %d\n", expression, message, file, line);
-};
+// KAPI void report_assertion_failure(const char* expression, const char* message, const char* file, i32 line) {
+//     log_output(LOG_LEVEL_FATAL, "Assertion Failure: %s, in file: %s, line: %d\n", expression, message, file, line);
+// };

@@ -8,7 +8,6 @@ mkdir -p ../bin
 cFilenames=$(find . -type f -name "*.c")
 
 # echo "Files:" $cFilenames
-
 assembly="tests"
 compilerFlags="-g -fdeclspec -fPIC" 
 # -fms-extensions 
