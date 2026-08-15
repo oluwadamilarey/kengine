@@ -70,7 +70,7 @@ void vulkan_image_view_create(
     VkImageAspectFlags aspect_flags) {
     VkImageViewCreateInfo view_create_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     view_create_info.image = image->handle;
-    view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;  // TODO: Make configurable.
+    view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     view_create_info.format = format;
     view_create_info.subresourceRange.aspectMask = aspect_flags;
 

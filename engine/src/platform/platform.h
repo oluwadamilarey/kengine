@@ -38,3 +38,5 @@ void platform_sleep(u64 ms);
 b8 platform_create_vulkan_surface(
     platform_state* plat_state,
     vulkan_context* context);
+
+f32 platform_get_device_pixel_ratio(platform_state* plat_state);

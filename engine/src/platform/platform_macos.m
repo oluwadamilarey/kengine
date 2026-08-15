@@ -27,8 +27,7 @@
  * headers win over a bare Vulkan loader install that lacks vulkan_metal.h.
  */
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_metal.h>   /* VkMetalSurfaceCreateInfoEXT, vkCreateMetalSurfaceEXT */
-
+#include <vulkan/vulkan_metal.h>   
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include <mach/mach_time.h>
@@ -56,9 +55,10 @@ keys translate_keycode(unsigned short keycode);
 - (void)windowDidResize:(NSNotification *)notification {
     NSWindow *window = notification.object;
     NSRect frame = [window contentRectForFrameRect:[window frame]];
+    CGFloat scale = window.backingScaleFactor;
     event_context ctx;
-    ctx.data.u16[0] = (u16)frame.size.width;
-    ctx.data.u16[1] = (u16)frame.size.height;
+    ctx.data.u16[0] = (u16)(frame.size.width  * scale);
+    ctx.data.u16[1] = (u16)(frame.size.height * scale);
     event_fire(EVENT_CODE_RESIZED, 0, ctx);
 }
 
@@ -291,6 +291,11 @@ void platform_shutdown(platform_state *plat_state) {
         plat_state->internal_state = NULL;
         KINFO("macOS platform shutdown");
     }
+}
+
+f32 platform_get_device_pixel_ratio(platform_state* plat_state) {
+    internal_state* state = (internal_state*)plat_state->internal_state;
+    return (f32)state->window.screen.backingScaleFactor;
 }
 
 /* -------------------------------------------------------------------------

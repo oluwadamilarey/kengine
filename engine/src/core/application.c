@@ -91,6 +91,10 @@ b8 application_create(game* game_inst) {
         return false;
     }
 
+    f32 pixel_ratio = platform_get_device_pixel_ratio(&app_state->platform);
+    app_state->width = (i16)(app_state->width * pixel_ratio);
+    app_state->height = (i16)(app_state->height * pixel_ratio);
+
     // Renderer startup
     if (!renderer_initialize(game_inst->app_config.name, &app_state->platform)) {
         KFATAL("Failed to initialize renderer. Aborting application.");

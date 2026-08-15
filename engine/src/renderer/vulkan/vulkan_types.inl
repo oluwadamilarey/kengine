@@ -2,6 +2,7 @@
 
 #include "defines.h"
 #include "core/asserts.h"
+#include "core/logger.h"
 
 #include <vulkan/vulkan.h>
 // checks the given expression's return value against VK_SUCCESS.
@@ -25,12 +26,8 @@ typedef struct vulkan_image {
 } vulkan_image;
 
 typedef struct vulkan_pipeline {
-    /** @brief The internal pipeline handle. */
     VkPipeline handle;
-    /** @brief The pipeline layout. */
     VkPipelineLayout pipeline_layout;
-    /** @brief Indicates the topology types used by this pipeline. See primitive_topology_type.*/
-    // primitive_topology_type_bits supported_topology_types;
 } vulkan_pipeline;
 
 typedef struct vulkan_fence {
@@ -76,7 +73,6 @@ typedef struct vulkan_swapchain {
     VkImage* images;
     VkImageView* views;  // darray
     vulkan_image depth_attachment;
-    // framebuffers used for on-screen rendering, one for each swapchain image.
     vulkan_framebuffer* framebuffers;  // darray
 } vulkan_swapchain;
 
@@ -145,27 +141,30 @@ typedef struct vulkan_shader_stage {
 #define OBJECT_SHADER_STAGE_COUNT 2
 
 typedef struct vulkan_object_shader {
-    // vertex , fragment
     vulkan_shader_stage stages[OBJECT_SHADER_STAGE_COUNT];
     vulkan_pipeline pipeline;
 } vulkan_object_shader;
 
 typedef struct vulkan_context {
-    // The framebuffer's current width.
     u32 framebuffer_width;
-    // The framebuffer's current height.
     u32 framebuffer_height;
-    // generation counter for framebuffer size changes, used to detect when the swapchain needs to be recreated.
     u64 framebuffer_size_generation;
-
-    // The framebuffer size generation at the last swapchain creation, used to detect when the swapchain needs to be recreated.
     u64 framebuffer_size_last_generation;
     VkInstance instance;
     VkAllocationCallbacks* allocator;
     VkSurfaceKHR surface;
-#if defined(_DEBUG)
+
+    // Always present regardless of build config so vulkan_context has a single,
+    // stable layout across every translation unit. A struct member gated on
+    // _DEBUG is a silent ABI break if even one .c/.m file in the build is
+    // compiled with a different _DEBUG state than the rest — every field
+    // after it (including find_memory_index, below) then lands at the wrong
+    // byte offset in that file's view of the struct. That produces exactly
+    // the "call through a seemingly-valid pointer that faults at 0x0" bug:
+    // the misaligned read/call lands on some other, zero-initialized field
+    // instead. Leave this unused outside debug builds rather than omitting it.
     VkDebugUtilsMessengerEXT debug_messenger;
-#endif
+
     vulkan_device device;
     vulkan_swapchain swapchain;
     vulkan_renderpass main_renderpass;
@@ -173,18 +172,14 @@ typedef struct vulkan_context {
     vulkan_buffer object_vertex_buffer;
     vulkan_buffer object_index_buffer;
 
-    // darray of command buffers, one for each frame in flight.
-    vulkan_command_buffer* graphics_command_buffers;
-    // darray
-    VkSemaphore* image_available_semaphores;
-    // darray
-    VkSemaphore* queue_complete_semaphores;
+    vulkan_command_buffer* graphics_command_buffers;  // darray
+    VkSemaphore* image_available_semaphores;          // darray
+    VkSemaphore* queue_complete_semaphores;           // darray
     u32 in_flight_fence_count;
 
     vulkan_fence* in_flight_fences;
     vulkan_fence** images_in_flight;
 
-    // VkFence* in_flight_fences;
     u32 image_index;
     u32 current_frame;
 

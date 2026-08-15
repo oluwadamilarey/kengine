@@ -56,6 +56,7 @@ b8 vulkan_buffer_create(
         vulkan_buffer_bind(context, out_buffer, 0);
     }
 
+    KDEBUG("buffer created ");
     return true;
 }
 
