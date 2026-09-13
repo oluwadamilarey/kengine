@@ -9,6 +9,7 @@ typedef struct game_state {
     mat4 view;
     vec3 camera_position;
     vec3 camera_euler;
+    b8 camera_view_dirty;  // Flag to indicate if the camera view matrix needs to be recalculated.
 } game_state;
 
 b8 game_initialize(game* game_inst);
