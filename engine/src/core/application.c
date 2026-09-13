@@ -25,6 +25,9 @@ typedef struct application_state {
     linear_allocator systems_allocator;
     u64 logging_system_memory_requirement;
     void* logging_system_state;
+    
+    u64 renderer_system_memory_requirement;
+    void* renderer_system_state;
 
     u64 memory_system_memory_requirement;
     void* memory_system_state;
@@ -96,12 +99,16 @@ b8 application_create(game* game_inst) {
     app_state->height = (i16)(app_state->height * pixel_ratio);
 
     // Renderer startup
-    if (!renderer_initialize(game_inst->app_config.name, &app_state->platform)) {
+    renderer_system_initialize(&app_state->renderer_system_memory_requirement, 0, game_inst->app_config.name, &app_state->platform);
+    app_state->renderer_system_state = linear_allocator_allocate(&app_state->systems_allocator, app_state->renderer_system_memory_requirement);
+    if (!renderer_system_initialize(&app_state->renderer_system_memory_requirement, app_state->renderer_system_state, game_inst->app_config.name, &app_state->platform)) {
         KFATAL("Failed to initialize renderer. Aborting application.");
         return false;
     }
+
     // Initialize clock system with platform state
     clock_set_platform_state(&app_state->platform);
+
     // Initialize the game.
     if (!app_state->game_inst->initialize(app_state->game_inst)) {
         KFATAL("Game failed to initialize.");
@@ -189,7 +196,7 @@ b8 application_run() {
     event_unregister(EVENT_CODE_KEY_RELEASED, 0, application_on_key);
     event_shutdown();
     input_shutdown();
-    renderer_shutdown();
+    renderer_system_shutdown();
 
     platform_shutdown(&app_state->platform);
     shutdown_memory(&app_state->memory_system_state);

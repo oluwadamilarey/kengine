@@ -3,6 +3,7 @@
 #include "defines.h"
 #include "core/asserts.h"
 #include "core/logger.h"
+#include "renderer/renderer_types.inl"
 
 #include <vulkan/vulkan.h>
 // checks the given expression's return value against VK_SUCCESS.
@@ -141,8 +142,20 @@ typedef struct vulkan_shader_stage {
 #define OBJECT_SHADER_STAGE_COUNT 2
 
 typedef struct vulkan_object_shader {
+    // vertex and fragment shader stages for the object shader.
     vulkan_shader_stage stages[OBJECT_SHADER_STAGE_COUNT];
     vulkan_pipeline pipeline;
+
+    VkDescriptorPool global_descriptor_pool;
+    VkDescriptorSetLayout global_descriptor_set_layout;
+
+    // one descriptor set per frame - max 3 for triple buffering
+    VkDescriptorSet global_descriptor_sets[3];
+
+    vulkan_buffer global_uniform_buffer;
+
+    // global uniform buffer object for the object shader. This is used to pass the projection and view matrices to the shader.
+    global_uniform_object global_ubo;
 } vulkan_object_shader;
 
 typedef struct vulkan_context {

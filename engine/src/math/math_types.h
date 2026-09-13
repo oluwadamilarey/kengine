@@ -33,32 +33,23 @@ typedef union vec3_u {
     };
 } vec3;
 
-typedef struct vec4_u {
+typedef union vec4_u {
 #if defined(KUSE_SIMD)
-    // used for SIMD operations, but not for storage. The actual data is stored in the elements array.
     alignas(16) __m128 data;
 #endif
-    // An array of x, y, z, w components. Used for storage and non-SIMD operations.
     alignas(16) f32 elements[4];
-    union {
-        struct
-        {
-            union {
-                // the first element
-                f32 x, r, s;
-            };
-            union {
-                // the second element
-                f32 y, g, t;
-            };
-            union {
-                // the third element
-                f32 z, b, p;
-            };
-            union {
-                // the fourth element
-                f32 w, a, q;
-            };
+    struct {
+        union {
+            f32 x, r, s;
+        };
+        union {
+            f32 y, g, t;
+        };
+        union {
+            f32 z, b, p;
+        };
+        union {
+            f32 w, a, q;
         };
     };
 } vec4;

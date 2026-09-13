@@ -1,5 +1,4 @@
 #include "vulkan_command_buffer.h"
-
 #include "core/kmemory.h"
 
 void vulkan_command_buffer_allocate(
@@ -32,7 +31,6 @@ void vulkan_command_buffer_free(
         pool,
         1,
         &command_buffer->handle);
-
     command_buffer->handle = 0;
     command_buffer->state = COMMAND_BUFFER_STATE_NOT_ALLOCATED;
 }

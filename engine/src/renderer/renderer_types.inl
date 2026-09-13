@@ -1,6 +1,15 @@
 #pragma once
 
 #include "defines.h"
+#include "math/math_types.h"
+typedef struct global_uniform_object {
+    mat4 projection;   // projection matrix for the camera 64 bytes
+    mat4 view;         // 64 bytes
+    mat4 m_reserved0;  // reserved for future use
+    mat4 m_reserved1;
+} global_uniform_object;
+
+#include "renderer/vulkan/vulkan_types.inl"
 
 typedef enum renderer_backend_type {
     RENDERER_BACKEND_TYPE_VULKAN,
@@ -16,10 +25,11 @@ typedef struct renderer_backend {
     void (*shutdown)(struct renderer_backend* backend);
     void (*resized)(struct renderer_backend* backend, u16 width, u16 height);
     b8 (*begin_frame)(struct renderer_backend* backend, f32 delta_time);
+    void (*update_global_state)(mat4 projection, mat4 view, vec3 view_position, vec4 ambient_colour, i32 mode);
     b8 (*end_frame)(struct renderer_backend* backend, f32 delta_time);
+    void (*update_object)(mat4 model);
 } renderer_backend;
 
 typedef struct render_packet {
     f32 delta_time;
 } render_packet;
-

@@ -17,6 +17,7 @@
 #include "math/kmath.h"
 #include "vulkan_buffer.h"
 #include "shaders/vulkan_object_shader.h"
+#include "vulkan_pipeline.h"
 
 // static Vulkan context shared across the backend implementation.
 // This is not ideal but it is simple and works for now. In the future,
@@ -201,9 +202,8 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
          * linear values for VkClearColorValue regardless of swapchain surface format.
          * Tint yellow: roughly #635b20 linearised (no gamma correction needed here
          * since these feed directly into the attachment clear, not a shader). */
-        7.0f, 0.4f, 0.4f, 1.4f,
-        1.0f, /* depth clear value — 1.0 = far plane (standard for reverse-Z omitted here) */
-        0);   /* stencil clear value */
+        0.0f, 0.0f, 0.2f, 1.0f, 1.0f, /* depth clear value — 1.0 = far plane (standard for reverse-Z omitted here) */
+        0);                           /* stencil clear value */
     // Swapchain framebuffers.
     context.swapchain.framebuffers = darray_reserve(vulkan_framebuffer, context.swapchain.image_count);
     regenerate_framebuffers(backend, &context.swapchain, &context.main_renderpass);
@@ -243,23 +243,24 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     vertex_3d verts[vert_count];
     kzero_memory(verts, sizeof(vertex_3d) * vert_count);
 
-    verts[0].position.x = 0.0;
-    verts[0].position.y = -0.5;
+    const f32 f = 10.0f;
+    verts[0].position.x = -0.5 * f;
+    verts[0].position.y = -0.5 * f;
 
-    verts[1].position.x = 0.5;
-    verts[1].position.y = 0.5;
+    verts[1].position.x = 0.5 * f;
+    verts[1].position.y = 0.5 * f;
 
-    verts[2].position.x = 0;
-    verts[2].position.y = 0.5;
+    verts[2].position.x = -0.5 * f;
+    verts[2].position.y = 0.5 * f;
 
-    verts[3].position.x = 0.5;
-    verts[3].position.y = -0.5;
+    verts[3].position.x = 0.5 * f;
+    verts[3].position.y = -0.5 * f;
 
     const u32 index_count = 6;
     u32 indices[index_count] = {0, 1, 2, 0, 3, 1};
 
     upload_data_range(&context, context.device.graphics_command_pool, 0, context.device.graphics_queue, &context.object_vertex_buffer, 0, sizeof(vertex_3d) * vert_count, verts);
-    upload_data_range(&context, context.device.graphics_command_pool, 0, context.device.graphics_queue, &context.object_index_buffer, 0, sizeof(vertex_3d) * index_count, indices);
+    upload_data_range(&context, context.device.graphics_command_pool, 0, context.device.graphics_queue, &context.object_index_buffer, 0, sizeof(u32) * index_count, indices);
     KINFO("Vulkan renderer initialized successfully.");
     return true;
 }
@@ -431,19 +432,18 @@ b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time
         &context.main_renderpass,
         context.swapchain.framebuffers[context.image_index].handle);
 
-    // TODO: temporary test code
-    vulkan_object_shader_use(&context, &context.object_shader);
-
-    // bind vertex buffer at offset
-    VkDeviceSize offsets[1] = {0};
-    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context.object_vertex_buffer.handle, (VkDeviceSize*)offsets);
-
-    // bind index buffer at offset
-    vkCmdBindIndexBuffer(command_buffer->handle, context.object_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
-
-    // Issue the draw
-    vkCmdDrawIndexed(command_buffer->handle, 6, 1, 0, 0, 0);
     return true;
+}
+
+void vulkan_renderer_update_global_state(mat4 projection, mat4 view, vec3 view_position, vec4 ambient_colour, i32 mode) {
+    vulkan_command_buffer* command_buffer = &context.graphics_command_buffers[context.image_index];
+    vulkan_object_shader_use(&context, &context.object_shader);
+    context.object_shader.global_ubo.projection = projection;
+    context.object_shader.global_ubo.view = view;
+
+    vulkan_object_shader_update_global_state(&context, &context.object_shader);
+
+    // TODO: temporary test code
 }
 
 b8 vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time) {
@@ -513,6 +513,23 @@ b8 vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time) 
         context.image_index);
 
     return true;
+}
+
+void vulkan_backend_update_object(mat4 model) {
+    vulkan_object_shader_update_object(&context, &context.object_shader, model);
+    vulkan_object_shader_use(&context, &context.object_shader);
+
+    vulkan_command_buffer* command_buffer = &context.graphics_command_buffers[context.image_index];
+
+    // bind vertex buffer at offset
+    VkDeviceSize offsets[1] = {0};
+    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context.object_vertex_buffer.handle, (VkDeviceSize*)offsets);
+
+    // bind index buffer at offset
+    vkCmdBindIndexBuffer(command_buffer->handle, context.object_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
+
+    // Issue the draw
+    vkCmdDrawIndexed(command_buffer->handle, 6, 1, 0, 0, 0);
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(

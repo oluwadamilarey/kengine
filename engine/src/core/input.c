@@ -39,7 +39,6 @@ void input_update(f64 delta_time) {
     if (!initialized) {
         return;
     }
-
     // Copy current states to previous states.
     kcopy_memory(&state.keyboard_previous, &state.keyboard_current, sizeof(keyboard_state));
     kcopy_memory(&state.mouse_previous, &state.mouse_current, sizeof(mouse_state));
@@ -48,30 +47,23 @@ void input_update(f64 delta_time) {
 void input_process_key(keys key, b8 pressed) {
     if (key == KEY_LALT) {
         KINFO("Left alt pressed.");
-
     } else if (key == KEY_RALT) {
         KINFO("Right alt pressed.");
     }
-
     if (key == KEY_LCONTROL) {
         KINFO("Left ctrl pressed.");
-
     } else if (key == KEY_RCONTROL) {
         KINFO("Right ctrl pressed.");
     }
-
     if (key == KEY_LSHIFT) {
         KINFO("Left shift pressed.");
-
     } else if (key == KEY_RSHIFT) {
         KINFO("Right shift pressed.");
     }
     if (state.keyboard_current.keys[key] != pressed) {
         state.keyboard_current.keys[key] = pressed;
-
         // NOTE: Enable this if debugging.
         KDEBUG("Key %s: key_code=0x%02X", pressed ? "pressed" : "released", key);
-
         event_context context;
         context.data.u16[0] = key;
         event_fire(pressed ? EVENT_CODE_KEY_PRESSED : EVENT_CODE_KEY_RELEASED, 0, context);
@@ -81,7 +73,6 @@ void input_process_key(keys key, b8 pressed) {
 void input_process_button(buttons button, b8 pressed) {
     if (state.mouse_current.buttons[button] != pressed) {
         state.mouse_current.buttons[button] = pressed;
-
         // NOTE: Enable this if debugging.
         KDEBUG("Mouse button %s: button=%d", pressed ? "pressed" : "released", button);
 

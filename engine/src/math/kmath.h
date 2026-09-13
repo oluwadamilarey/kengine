@@ -870,6 +870,7 @@ KINLINE mat4 mat4_look_at(vec3 position, vec3 target, vec3 up) {
  */
 KINLINE mat4 mat4_transposed(mat4 matrix) {
     mat4 out_matrix = mat4_identity();
+
     out_matrix.data[0] = matrix.data[0];
     out_matrix.data[1] = matrix.data[4];
     out_matrix.data[2] = matrix.data[8];
@@ -886,6 +887,7 @@ KINLINE mat4 mat4_transposed(mat4 matrix) {
     out_matrix.data[13] = matrix.data[7];
     out_matrix.data[14] = matrix.data[11];
     out_matrix.data[15] = matrix.data[15];
+
     return out_matrix;
 }
 

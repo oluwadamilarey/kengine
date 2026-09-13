@@ -3,9 +3,19 @@
 #include <core/logger.h>
 #include <core/kmemory.h>
 #include <core/input.h>
+#include <math/kmath.h>
+// HACK: This should not be available outside the engine
+#include <renderer/renderer_frontend.h>
 
 b8 game_initialize(game* game_inst) {
     KDEBUG("game_initialize() called!");
+
+    game_state* state = (game_state*)game_inst->state;
+
+    f32 z = 0.001f;
+    state->view = mat4_translation((vec3){0, 0, z});
+    state->view = mat4_inverse(state->view);
+
     return true;
 }
 
@@ -16,6 +26,8 @@ b8 game_update(game* game_inst, f32 delta_time) {
     if (input_is_key_up('M') && input_was_key_down('M')) {
         KDEBUG("Allocations: %llu (%llu this frame)", alloc_count, alloc_count - prev_alloc_count);
     }
+
+    renderer_set_view(((game_state*)game_inst->state)->view);
     return true;
 }
 
