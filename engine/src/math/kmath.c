@@ -57,3 +57,11 @@ f32 fkrandom() {
 f32 fkrandom_in_range(f32 min, f32 max) {
     return min + ((float)krandom() / ((f32)RAND_MAX / (max - min)));
 }
+
+f32 katan(f32 x) {
+    return atanf(x);
+}
+
+f32 katan2(f32 y, f32 x) {
+    return atan2f(y, x);
+}

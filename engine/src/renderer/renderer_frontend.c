@@ -102,6 +102,20 @@ b8 renderer_draw_frame(render_packet* packet) {
     return true;
 }
 
+void renderer_create_texture(const char* name,
+                             i32 width,
+                             i32 height,
+                             i32 channel_count,
+                             b8 has_transparency,
+                             const u8* pixels,
+                             struct texture* out_texture) {
+    state_ptr->backend.create_texture(name, width, height, channel_count, has_transparency, pixels, out_texture);
+};
+
+void renderer_destroy_texture(struct texture* texture) {
+    state_ptr->backend.destroy_texture(texture);
+}
+
 void renderer_set_view(mat4 view) {
     if (state_ptr) {
         state_ptr->view = view;

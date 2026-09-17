@@ -141,6 +141,27 @@ typedef struct vulkan_shader_stage {
 
 #define OBJECT_SHADER_STAGE_COUNT 2
 
+#define VULKAN_OBJECT_SHADER_DESCRIPTOR_COUNT 1
+
+typedef struct vulkan_descriptor_state {
+    // one per frame
+    u32 generations[3]
+} vulkan_descriptor_state;
+
+typedef struct vulkan_object_shader_object_state {
+    // per frame
+    VkDescriptorSet descriptor_sets[3];  // one descriptor set per frame - max 3 for triple buffering
+
+    // Per descriptor
+    vulkan_descriptor_state descriptor_states[VULKAN_OBJECT_SHADER_DESCRIPTOR_COUNT]
+
+} vulkan_object_shader_object_state;
+
+// max number of objects that can be rendered in a single draw call.
+// This is used to limit the number of objects that can be rendered in a single draw call,
+// and to limit the size of the uniform buffer object for the object shader.
+#define VULKAN_OBJECT_MAX_OBJECTS_COUNT 1024
+
 typedef struct vulkan_object_shader {
     // vertex and fragment shader stages for the object shader.
     vulkan_shader_stage stages[OBJECT_SHADER_STAGE_COUNT];
@@ -154,6 +175,21 @@ typedef struct vulkan_object_shader {
 
     vulkan_buffer global_uniform_buffer;
 
+    VkDescriptorPool object_descriptor_pool;
+    VkDescriptorSetLayout object_descriptor_set_layout;
+
+    // object uniform buffers
+    vulkan_buffer object_uniform_buffer;  // one uniform buffer per frame - max 3 for triple buffering
+    u32 object_uniform_buffer_index;
+
+    // per object state - one per object that can be rendered in a single draw call.
+    // This is used to track the descriptor sets for each object, and to track the generation of the descriptor sets.
+    // This is used to determine if the descriptor sets need to be updated for each object.
+    // This is used to limit the number of objects that can be rendered in a single draw call, and to limit the size of the uniform buffer object for the object shader.
+    // TODO: consider moving this to a separate struct that is owned by the renderer backend, rather than being part of the shader struct.
+    // TODO: make this configurable, rather than being a fixed size array. This will allow for more flexibility in the number of objects that can be rendered in a single draw call.
+    vulkan_object_shader_object_state object_states[VULKAN_OBJECT_MAX_OBJECTS_COUNT];
+
     // global uniform buffer object for the object shader. This is used to pass the projection and view matrices to the shader.
     global_uniform_object global_ubo;
 } vulkan_object_shader;
@@ -166,6 +202,7 @@ typedef struct vulkan_context {
     VkInstance instance;
     VkAllocationCallbacks* allocator;
     VkSurfaceKHR surface;
+    f32 frame_delta_time;
 
     // Always present regardless of build config so vulkan_context has a single,
     // stable layout across every translation unit. A struct member gated on
@@ -205,3 +242,9 @@ typedef struct vulkan_context {
 
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
 } vulkan_context;
+
+typedef struct vulkan_texture_data {
+    vulkan_image image;
+    VkSampler sampler;
+    VkDescriptorImageInfo descriptor_info;
+} vulkan_texture_data;

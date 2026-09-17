@@ -48,7 +48,7 @@ void vulkan_image_create(
     }
 
     // Allocate memory
-    VkMemoryAllocateInfo memory_allocate_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO}; 
+    VkMemoryAllocateInfo memory_allocate_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     memory_allocate_info.allocationSize = memory_requirements.size;
     memory_allocate_info.memoryTypeIndex = memory_type;
     VK_CHECK(vkAllocateMemory(context->device.logical_device, &memory_allocate_info, context->allocator, &out_image->memory));
@@ -61,6 +61,104 @@ void vulkan_image_create(
         out_image->view = 0;
         vulkan_image_view_create(context, format, out_image, view_aspect_flags);
     }
+}
+
+void vulkan_image_transition_layout(
+    vulkan_context* context,
+    vulkan_command_buffer* command_buffer,
+    vulkan_image* image,
+    VkFormat format,
+    VkImageLayout old_layout,
+    VkImageLayout new_layout) {
+    VkImageMemoryBarrier barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    barrier.srcQueueFamilyIndex = context->device.graphics_queue_index;
+    barrier.dstQueueFamilyIndex = context->device.graphics_queue_index;
+    barrier.image = image->handle;
+
+    // Determine aspect mask from format so depth/stencil targets transition correctly too.
+    if (format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT) {
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    } else if (format == VK_FORMAT_D32_SFLOAT || format == VK_FORMAT_D16_UNORM) {
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    } else {
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkPipelineStageFlags source_stage;
+    VkPipelineStageFlags dest_stage;
+
+    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        // Nothing to wait on; we're about to write via a transfer.
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dest_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        // Wait for the transfer write to finish before any shader reads it.
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        source_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dest_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    } else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+        source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dest_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    } else {
+        KFATAL("vulkan_image_transition_layout: unsupported layout transition (old=%d, new=%d)!", old_layout, new_layout);
+        return;
+    }
+
+    vkCmdPipelineBarrier(
+        command_buffer->handle,
+        source_stage, dest_stage,
+        0,
+        0, 0,  // memory barriers
+        0, 0,  // buffer memory barriers
+        1, &barrier);
+}
+
+void vulkan_image_copy_from_buffer(
+    vulkan_context* context,
+    vulkan_command_buffer* command_buffer,
+    vulkan_image* image,
+    VkBuffer buffer) {
+    VkBufferImageCopy region;
+    kzero_memory(&region, sizeof(VkBufferImageCopy));
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;    // tightly packed
+    region.bufferImageHeight = 0;  // tightly packed
+
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+
+    region.imageOffset.x = 0;
+    region.imageOffset.y = 0;
+    region.imageOffset.z = 0;
+
+    region.imageExtent.width = image->width;
+    region.imageExtent.height = image->height;
+    region.imageExtent.depth = 1;
+
+    vkCmdCopyBufferToImage(
+        command_buffer->handle,
+        buffer,
+        image->handle,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region);
 }
 
 void vulkan_image_view_create(

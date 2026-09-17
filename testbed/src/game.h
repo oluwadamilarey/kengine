@@ -10,6 +10,9 @@ typedef struct game_state {
     vec3 camera_position;
     vec3 camera_euler;
     b8 camera_view_dirty;  // Flag to indicate if the camera view matrix needs to be recalculated.
+    f32 camera_fov_radians;
+    vec3 orbit_target;  // the quad's position, or wherever you want to orbit around
+    f32 orbit_radius;
 } game_state;
 
 b8 game_initialize(game* game_inst);

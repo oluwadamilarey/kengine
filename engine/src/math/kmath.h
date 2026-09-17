@@ -38,6 +38,8 @@ KAPI f32 ktan(f32 x);
 KAPI f32 kacos(f32 x);
 KAPI f32 ksqrt(f32 x);
 KAPI f32 kabs(f32 x);
+KAPI f32 katan(f32 x);
+KAPI f32 katan2(f32 y, f32 x);
 
 /**
  * Indicates if the value is a power of 2. 0 is considered _not_ a power of 2.
