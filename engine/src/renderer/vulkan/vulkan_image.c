@@ -17,6 +17,16 @@ void vulkan_image_create(
     b32 create_view,
     VkImageAspectFlags view_aspect_flags,
     vulkan_image* out_image) {
+    // Basic sanity checks to avoid NULL function-pointer calls.
+    if (!context) {
+        KFATAL("vulkan_image_create called with NULL context.");
+        return;
+    }
+    if (!context->find_memory_index) {
+        KFATAL("vulkan_image_create: context->find_memory_index is NULL. Did you forget to set it before creating images?");
+        return;
+    }
+
     // Copy params
     out_image->width = width;
     out_image->height = height;
@@ -45,6 +55,7 @@ void vulkan_image_create(
     i32 memory_type = context->find_memory_index(memory_requirements.memoryTypeBits, memory_flags);
     if (memory_type == -1) {
         KERROR("Required memory type not found. Image not valid.");
+        return;
     }
 
     // Allocate memory

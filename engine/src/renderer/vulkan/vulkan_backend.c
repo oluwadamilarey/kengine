@@ -9,6 +9,7 @@
 #include "vulkan_fence.h"
 #include "vulkan_utils.h"
 #include "core/logger.h"
+
 #include "core/kstring.h"
 #include "core/kmemory.h"
 #include "core/application.h"
@@ -235,7 +236,7 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
         context.images_in_flight[i] = 0;
     }
     // create builtin shaders
-    if (!vulkan_object_shader_create(&context, &context.object_shader)) {
+    if (!vulkan_object_shader_create(&context, backend->default_diffuse, &context.object_shader)) {
         KERROR("Error loading builtin basic lighting shader.");
         return false;
     }
@@ -248,15 +249,23 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
     const f32 f = 10.0f;
     verts[0].position.x = -0.5 * f;
     verts[0].position.y = -0.5 * f;
+    verts[0].texcoord.x = 0.0f;
+    verts[0].texcoord.y = 0.0f;
 
     verts[1].position.x = 0.5 * f;
     verts[1].position.y = 0.5 * f;
+    verts[1].texcoord.x = 1.0f;
+    verts[1].texcoord.y = 1.0f;
 
     verts[2].position.x = -0.5 * f;
     verts[2].position.y = 0.5 * f;
+    verts[2].texcoord.x = 0.0f;
+    verts[2].texcoord.y = 1.0f;
 
     verts[3].position.x = 0.5 * f;
     verts[3].position.y = -0.5 * f;
+    verts[3].texcoord.x = 1.0f;
+    verts[3].texcoord.y = 0.0f;
 
     const u32 index_count = 6;
     u32 indices[index_count] = {0, 1, 2, 0, 3, 1};
@@ -266,7 +275,7 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
 
     u32 object_id = 0;
     if (!vulkan_object_shader_acquire_resources(&context, &context.object_shader, &object_id)) {
-        KERROR('failed to acquire shader resources');
+        KINFO("failed to acquire shader resources");
         return false;
     }
 
@@ -815,7 +824,7 @@ b8 create_buffers(vulkan_context* context) {
             memory_property_flags,
             true,
             &context->object_index_buffer)) {
-        KERROR("Error creating vertex buffer.");
+        KERROR("Error creating index buffer.");
         return false;
     }
     context->geometry_index_offset = 0;
@@ -824,6 +833,7 @@ b8 create_buffers(vulkan_context* context) {
 }
 
 void vulkan_renderer_create_texture(const char* name,
+                                    b8 auto_release,
                                     i32 width,
                                     i32 height,
                                     i32 channel_count,
@@ -846,6 +856,9 @@ void vulkan_renderer_create_texture(const char* name,
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     vulkan_buffer staging;
     vulkan_buffer_create(&context, image_size, usage, properties, true, &staging);
+    KINFO("tex %dx%d ch=%d size=%llu first px: %u %u %u %u",
+          width, height, channel_count, (u64)image_size,
+          pixels[0], pixels[1], pixels[2], pixels[3]);
 
     vulkan_buffer_load_data(&context, &staging, 0, image_size, 0, pixels);
 
@@ -867,19 +880,25 @@ void vulkan_renderer_create_texture(const char* name,
     VkQueue queue = context.device.graphics_queue;
     vulkan_command_buffer_allocate_and_begin_single_use(&context, pool, &temp_buffer);
 
-    vulkan_buffer_destroy(&context, &staging);
-
-    // transition the layout from whatever it is currently to shader-read-only optimal
+    // 1. UNDEFINED -> TRANSFER_DST_OPTIMAL
     vulkan_image_transition_layout(
-        &context,
-        &temp_buffer,
-        &data_image->image,
-        image_format,
+        &context, &temp_buffer, &data_image->image, image_format,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // 2. staging buffer -> image
+    vulkan_image_copy_from_buffer(&context, &temp_buffer, &data_image->image, staging.handle);
+
+    // 3. TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL
+    vulkan_image_transition_layout(
+        &context, &temp_buffer, &data_image->image, image_format,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     vulkan_command_buffer_end_single_use(&context, pool, &temp_buffer, queue);
 
+    // 4. Safe to free only after the submit has completed
+    vulkan_buffer_destroy(&context, &staging);
     // create a smapler for the texture
     VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     // TODO: make this configurable

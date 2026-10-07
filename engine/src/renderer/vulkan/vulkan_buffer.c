@@ -14,6 +14,16 @@ b8 vulkan_buffer_create(
     u32 memory_property_flags,
     b8 bind_on_create,
     vulkan_buffer* out_buffer) {
+    // Basic sanity checks to avoid calling through NULL context/function pointers.
+    if (!context) {
+        KFATAL("vulkan_buffer_create called with NULL context.");
+        return false;
+    }
+    if (!context->find_memory_index) {
+        KFATAL("vulkan_buffer_create: context->find_memory_index is NULL. Did you forget to set it before creating buffers?");
+        return false;
+    }
+
     kzero_memory(out_buffer, sizeof(vulkan_buffer));
     out_buffer->total_size = size;
     out_buffer->usage = usage;

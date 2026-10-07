@@ -3,7 +3,6 @@
 #include "defines.h"
 #include "math/math_types.h"
 #include "resources/resource_types.h"
-#include "vulkan/vulkan_types.inl"
 
 typedef struct global_uniform_object {
     mat4 projection;   // 64 bytes - projection matrix for the camera
@@ -12,7 +11,7 @@ typedef struct global_uniform_object {
     mat4 m_reserved1;  // 64 bytes - reserved for future use
 } global_uniform_object;
 
-#include "renderer/vulkan/vulkan_types.inl"
+#include "vulkan/vulkan_types.inl"
 
 typedef enum renderer_backend_type {
     RENDERER_BACKEND_TYPE_VULKAN,
@@ -31,14 +30,17 @@ typedef struct object_uniform_object {
 } object_uniform_object;
 
 typedef struct geometry_render_data {
-    mat4 model;            // 64 bytes - model matrix for the object
-    u32 object_id;         // 48 bytes - uniform buffer object for the object
-    texture* texture[16];  // 8 bytes - pointer to the texture associated with the object
+    mat4 model;             // 64 bytes - model matrix for the object
+    u32 object_id;          // 48 bytes - uniform buffer object for the object
+    texture* textures[16];  // 8 bytes - pointer to the texture associated with the object
 } geometry_render_data;
 
 typedef struct renderer_backend {
     struct platform_state* plat_state;
     u64 frame_number;
+
+    // pointer to the default diffuse texture that is used when an object does not have a texture assigned to it.
+    texture* default_diffuse;
     b8 (*initialize)(struct renderer_backend* backend, const char* application_name, struct platform_state* plat_state);
     void (*shutdown)(struct renderer_backend* backend);
     void (*resized)(struct renderer_backend* backend, u16 width, u16 height);
@@ -49,6 +51,7 @@ typedef struct renderer_backend {
 
     void (*create_texture)(
         const char* name,
+        b8 auto_release,
         i32 width,
         i32 height,
         i32 channel_count,
