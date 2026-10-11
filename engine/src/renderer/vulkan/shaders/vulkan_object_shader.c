@@ -1,5 +1,7 @@
 #include "vulkan_object_shader.h"
 
+#include <stddef.h>
+
 #include "core/logger.h"
 #include "core/kmemory.h"
 #include "math/math_types.h"
@@ -95,23 +97,25 @@ b8 vulkan_object_shader_create(vulkan_context* context, texture* default_diffuse
     scissor.offset.x = scissor.offset.y = 0;
     scissor.extent.width = context->framebuffer_width;
     scissor.extent.height = context->framebuffer_height;
-    // Attributes
-    u32 offset = 0;
+    // Attributes. Offsets must match vertex_3d (math/kmath.h):
+    // position @0, normal @12, texcoord @24 — NOT packed.
+    // The old code assumed texcoord directly follows position (offset 12),
+    // which actually read normal.xy (all zeros) as UVs, collapsing the
+    // whole quad onto texel (0,0) -> flat near-black.
 #define ATTRIBUTE_COUNT 2
     VkVertexInputAttributeDescription attribute_descriptions[ATTRIBUTE_COUNT];
-    // Position
     VkFormat formats[ATTRIBUTE_COUNT] = {
-        VK_FORMAT_R32G32B32_SFLOAT,
-        VK_FORMAT_R32G32_SFLOAT,
+        VK_FORMAT_R32G32B32_SFLOAT,  // location 0: position
+        VK_FORMAT_R32G32_SFLOAT,     // location 1: texcoord
     };
-    u64 sizes[ATTRIBUTE_COUNT] = {
-        sizeof(vec3), sizeof(vec2)};
+    u32 attr_offsets[ATTRIBUTE_COUNT] = {
+        (u32)offsetof(vertex_3d, position),
+        (u32)offsetof(vertex_3d, texcoord)};
     for (u32 i = 0; i < ATTRIBUTE_COUNT; ++i) {
         attribute_descriptions[i].binding = 0;   // binding index - should match binding desc
         attribute_descriptions[i].location = i;  // attrib location
         attribute_descriptions[i].format = formats[i];
-        attribute_descriptions[i].offset = offset;
-        offset += sizes[i];
+        attribute_descriptions[i].offset = attr_offsets[i];
     }
     // TODO: Desciptor set layouts.
     const i32 descriptor_set_layout_count = 2;
@@ -294,12 +298,12 @@ void vulkan_object_shader_update_object(vulkan_context* context, struct vulkan_o
 
         // if the texture hasn't been loaded yet, use the default
         // TODO: Determine which use the texture has and pull appropiate result based on that
-        if (t->generation == INVALID_ID) {
+        if (!t || t->generation == INVALID_ID) {
             t = shader->default_diffuse;
 
             // reset the descriptor generation if using the default texture
             *descriptor_generation = INVALID_ID;
-        };
+        }
 
         if (t && (*descriptor_generation != t->generation || *descriptor_generation == INVALID_ID)) {
             vulkan_texture_data* internal_data = (vulkan_texture_data*)t->internal_data;
@@ -323,9 +327,8 @@ void vulkan_object_shader_update_object(vulkan_context* context, struct vulkan_o
             if (t->generation != INVALID_ID) {
                 *descriptor_generation = t->generation;
             }
-
-            descriptor_index++;
         }
+        descriptor_index++;
     }
 
     if (descriptor_count > 0) {
@@ -372,7 +375,7 @@ void vulkan_object_shader_release_resources(vulkan_context* context, struct vulk
     vulkan_object_shader_object_state* object_state = &shader->object_states[out_object_id];
 
     const u32 descriptor_set_count = 3;
-    VkResult result = vkFreeDescriptorSets(context->device.logical_device, shader->global_descriptor_pool, descriptor_set_count, object_state->descriptor_sets);
+    VkResult result = vkFreeDescriptorSets(context->device.logical_device, shader->object_descriptor_pool, descriptor_set_count, object_state->descriptor_sets);
 
     if (result != VK_SUCCESS) {
         KERROR("Error freeing object shader descriptor sets");

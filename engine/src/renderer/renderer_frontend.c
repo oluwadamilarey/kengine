@@ -5,7 +5,7 @@
 #include "core/kmemory.h"
 #include "math/kmath.h"
 
-#include "core/kstring.h" x
+#include "core/kstring.h"
 #include "core/event.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -18,6 +18,7 @@ typedef struct renderer_system_state {
     f32 near_clip;
     f32 far_clip;
     texture default_texture;
+    texture cobblestone_texture;
     texture test_diffuse;
 } renderer_system_state;
 
@@ -51,10 +52,8 @@ b8 load_texture(const char* texture_name, texture* t) {
     if (data) {
         u32 current_generation = t->generation;
         t->generation = INVALID_ID;  // mark the texture as invalid until it is fully loaded
-        u64 total_size = temp_texture.width * temp_texture.height * required_channel_count;
+        u64 total_size = (u64)temp_texture.width * temp_texture.height * required_channel_count;
         // check for transperency in the texture data
-        b32 has_transparency = false;
-
         for (u64 i = 0; i < total_size; i += required_channel_count) {
             u8 alpha = data[i + 3];
             if (alpha < 255) {
@@ -63,15 +62,10 @@ b8 load_texture(const char* texture_name, texture* t) {
             }
         }
 
-        if (stbi_failure_reason()) {
-            KWARN("Failed to load texture: %s. Reason: %s", full_file_path, stbi_failure_reason());
-            return false;
-        }
-
         // acquire internal resources and upload to the GPU
         renderer_create_texture(
             texture_name,
-            false,  // auto_release
+            true,  // auto_release
             temp_texture.width,
             temp_texture.height,
             temp_texture.channel_count,
@@ -91,9 +85,6 @@ b8 load_texture(const char* texture_name, texture* t) {
 
         stbi_image_free(data);
         return true;
-
-        create_texture(t);
-        t->width = temp_texture.width;
     } else {
         if (stbi_failure_reason()) {
             KWARN("Failed to load texture: %s. Reason: %s", full_file_path, stbi_failure_reason());
@@ -104,18 +95,29 @@ b8 load_texture(const char* texture_name, texture* t) {
     }
 }
 
-b8 event_on_debug_event(u16 code, void* sender, void* listener_inst, event_context data){
+b8 event_on_debug_event(u16 code, void* sender, void* listener_inst, event_context data) {
+    const char* names[3] = {
+        "cobblestone",
+        "paving",
+        "paving2"};
+    static i8 choice = 2;
+    choice++;
+    choice %= 3;
 
+    // load up the new texture
+    load_texture(names[choice], &state_ptr->test_diffuse);
+    return true;
 }
 
 b8 renderer_system_initialize(u64* memory_requirement, void* state, const char* application_name, struct platform_state* plat_state) {
     *memory_requirement = sizeof(renderer_system_state);
     if (state == 0) {
-        // First pass: caller only wants the size, so it can allocate the block.
         return true;
     }
 
     state_ptr = state;
+
+    event_register(EVENT_CODE_DEBUG0, state_ptr, event_on_debug_event);
 
     // take a pointer to the default textures for use on the backend
     state_ptr->backend.default_diffuse = &state_ptr->default_texture;
@@ -178,13 +180,13 @@ b8 renderer_system_initialize(u64* memory_requirement, void* state, const char* 
         pixels,
         &state_ptr->default_texture);
 
-    // manually set the texure generation to INVALID_ID since this is the first texture being created
-    state_ptr->default_texture.generation = INVALID_ID;
+    // Pixels are uploaded to the GPU by create_texture; free the CPU copy.
+    kfree(pixels, pixel_count * channels * sizeof(u8), MEMORY_TAG_RENDERER);
 
     // TODO: load other textures here, or provide a way for the application to load them.
     create_texture(&state_ptr->test_diffuse);
-    if (!load_texture("test_diffuse", &state_ptr->test_diffuse)) {
-        KWARN("Failed to load test_diffuse texture.");
+    if (!load_texture("paving", &state_ptr->test_diffuse)) {
+        KWARN("Failed to load cobblestone texture, falling back to default.");
     }
 
     return true;
@@ -192,6 +194,7 @@ b8 renderer_system_initialize(u64* memory_requirement, void* state, const char* 
 
 void renderer_system_shutdown() {
     if (state_ptr) {
+        event_unregister(EVENT_CODE_DEBUG0, state_ptr, event_on_debug_event);
         renderer_destroy_texture(&state_ptr->default_texture);
         renderer_destroy_texture(&state_ptr->test_diffuse);
         state_ptr->backend.shutdown(&state_ptr->backend);
@@ -236,7 +239,7 @@ b8 renderer_draw_frame(render_packet* packet) {
         geometry_render_data data = {};
         data.object_id = 0;
         data.model = model;
-        data.textures[0] = &state_ptr->test_diffuse;
+        data.textures[0] = &state_ptr->test_diffuse;  // use the test diffuse texture for the object
         state_ptr->backend.update_object(&data);
 
         b8 result = renderer_end_frame(packet->delta_time);

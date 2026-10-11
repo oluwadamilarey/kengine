@@ -55,7 +55,7 @@ void upload_data_range(vulkan_context* context, VkCommandPool pool, VkFence fenc
     // perform the copy from staging to the device local buffer.
     vulkan_buffer_copy_to(context, pool, fence, queue, staging.handle, 0, buffer->handle, offset, size);
 
-    // cleam up the staging buffer
+    // clean up the staging buffer
     vulkan_buffer_destroy(context, &staging);
 }
 
