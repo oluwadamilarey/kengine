@@ -21,6 +21,7 @@
 #include "vulkan_pipeline.h"
 #include "resources/resource_types.h"
 #include "vulkan_image.h"
+#include "vulkan_profiler.h"
 
 // static Vulkan context shared across the backend implementation.
 // This is not ideal but it is simple and works for now. In the future,
@@ -29,6 +30,21 @@
 static vulkan_context context;
 static u32 cached_framebuffer_width = 0;
 static u32 cached_framebuffer_height = 0;
+
+// Redundant-bind cache (KENGINE_BIND_CACHE=1). Reset every frame, since beginning a
+// command buffer discards all bound state. Kept out of vulkan_context on purpose so
+// the context layout does not depend on a runtime switch.
+static VkBuffer bound_vertex_buffer = VK_NULL_HANDLE;
+static VkBuffer bound_index_buffer = VK_NULL_HANDLE;
+static b8 pipeline_bound_this_frame = false;
+
+static b8 bind_cache_enabled(void) {
+    static i32 state = -1;
+    if (state < 0) {
+        state = vulkan_profiler_env_flag("KENGINE_BIND_CACHE", false) ? 1 : 0;
+    }
+    return state == 1;
+}
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
@@ -279,12 +295,25 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
         return false;
     }
 
+    // Stress mode (KENGINE_STRESS_DRAWS=N): acquire descriptor sets for the extra
+    // objects the frontend will draw. Does nothing at the default of 1.
+    const u32 stress_draws = vulkan_profiler_stress_draws();
+    for (u32 i = 1; i < stress_draws; ++i) {
+        if (!vulkan_object_shader_acquire_resources(&context, &context.object_shader, &object_id)) {
+            KERROR("Failed to acquire shader resources for stress object %u", i);
+            return false;
+        }
+    }
+
+    vulkan_profiler_initialize(&context, plat_state);
+
     KINFO("Vulkan renderer initialized successfully.");
     return true;
 }
 
 void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
     vkDeviceWaitIdle(context.device.logical_device);
+    vulkan_profiler_shutdown(&context);
     // Destroy in the opposite order of creation.
     // Destroy buffers
     vulkan_buffer_destroy(&context, &context.object_vertex_buffer);
@@ -366,6 +395,7 @@ void vulkan_renderer_backend_on_resized(renderer_backend* backend, u16 width, u1
 }
 
 b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time) {
+    vulkan_profiler_cpu_frame_begin();
     context.frame_delta_time = delta_time;
     vulkan_device* device = &context.device;
 
@@ -399,23 +429,29 @@ b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time
     }
 
     // Wait for the execution of the current frame to complete. The fence being free will allow this one to move on.
-    if (!vulkan_fence_wait(
-            &context,
-            &context.in_flight_fences[context.current_frame],
-            UINT64_MAX)) {
+    vulkan_profiler_stall_begin();
+    b8 fence_ok = vulkan_fence_wait(
+        &context,
+        &context.in_flight_fences[context.current_frame],
+        UINT64_MAX);
+    vulkan_profiler_stall_end();
+    if (!fence_ok) {
         KWARN("In-flight fence wait failure!");
         return false;
     }
 
     // Acquire the next image from the swap chain. Pass along the semaphore that should signaled when this completes.
     // This same semaphore will later be waited on by the queue submission to ensure this image is available.
-    if (!vulkan_swapchain_acquire_next_image_index(
-            &context,
-            &context.swapchain,
-            UINT64_MAX,
-            context.image_available_semaphores[context.current_frame],
-            0,
-            &context.image_index)) {
+    vulkan_profiler_stall_begin();
+    b8 acquire_ok = vulkan_swapchain_acquire_next_image_index(
+        &context,
+        &context.swapchain,
+        UINT64_MAX,
+        context.image_available_semaphores[context.current_frame],
+        0,
+        &context.image_index);
+    vulkan_profiler_stall_end();
+    if (!acquire_ok) {
         return false;
     }
 
@@ -423,6 +459,14 @@ b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time
     vulkan_command_buffer* command_buffer = &context.graphics_command_buffers[context.image_index];
     vulkan_command_buffer_reset(command_buffer);
     vulkan_command_buffer_begin(command_buffer, false, false, false);
+
+    // Beginning a command buffer discards all bound state, so the bind cache starts empty.
+    bound_vertex_buffer = VK_NULL_HANDLE;
+    bound_index_buffer = VK_NULL_HANDLE;
+    pipeline_bound_this_frame = false;
+
+    // GPU timestamp for the start of the frame. Must be outside the render pass.
+    vulkan_profiler_gpu_frame_begin(&context, command_buffer->handle, context.image_index);
 
     // Dynamic state
     VkViewport viewport;
@@ -457,6 +501,7 @@ b8 vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time
 void vulkan_renderer_update_global_state(mat4 projection, mat4 view, vec3 view_position, vec4 ambient_colour, i32 mode) {
     vulkan_command_buffer* command_buffer = &context.graphics_command_buffers[context.image_index];
     vulkan_object_shader_use(&context, &context.object_shader);
+    pipeline_bound_this_frame = true;
     context.object_shader.global_ubo.projection = projection;
     context.object_shader.global_ubo.view = view;
 
@@ -471,14 +516,19 @@ b8 vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time) 
     // End renderpass
     vulkan_renderpass_end(command_buffer, &context.main_renderpass);
 
+    // GPU timestamp for the end of the frame, after the render pass has ended.
+    vulkan_profiler_gpu_frame_end(&context, command_buffer->handle, context.image_index);
+
     vulkan_command_buffer_end(command_buffer);
 
     // Make sure the previous frame is not using this image (i.e. its fence is being waited on)
     if (context.images_in_flight[context.image_index] != VK_NULL_HANDLE) {  // was frame
+        vulkan_profiler_stall_begin();
         vulkan_fence_wait(
             &context,
             context.images_in_flight[context.image_index],
             UINT64_MAX);
+        vulkan_profiler_stall_end();
     }
 
     // Mark the image fence as in-use by this frame.
@@ -531,21 +581,36 @@ b8 vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time) 
         context.queue_complete_semaphores[context.image_index],
         context.image_index);
 
+    vulkan_profiler_cpu_frame_end();
     return true;
 }
 
 void vulkan_backend_update_object(geometry_render_data* data) {
     vulkan_object_shader_update_object(&context, &context.object_shader, data);
-    vulkan_object_shader_use(&context, &context.object_shader);
+
+    // With KENGINE_BIND_CACHE=1 the pipeline is bound once per frame (update_global_state
+    // already did it) and the vertex/index buffers only when they change. With it off,
+    // every draw rebinds everything, which is the engine's original behaviour.
+    const b8 cache = bind_cache_enabled();
+    if (!cache || !pipeline_bound_this_frame) {
+        vulkan_object_shader_use(&context, &context.object_shader);
+        pipeline_bound_this_frame = true;
+    }
 
     vulkan_command_buffer* command_buffer = &context.graphics_command_buffers[context.image_index];
 
     // bind vertex buffer at offset
-    VkDeviceSize offsets[1] = {0};
-    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context.object_vertex_buffer.handle, (VkDeviceSize*)offsets);
+    if (!cache || bound_vertex_buffer != context.object_vertex_buffer.handle) {
+        VkDeviceSize offsets[1] = {0};
+        vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context.object_vertex_buffer.handle, (VkDeviceSize*)offsets);
+        bound_vertex_buffer = context.object_vertex_buffer.handle;
+    }
 
     // bind index buffer at offset
-    vkCmdBindIndexBuffer(command_buffer->handle, context.object_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
+    if (!cache || bound_index_buffer != context.object_index_buffer.handle) {
+        vkCmdBindIndexBuffer(command_buffer->handle, context.object_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
+        bound_index_buffer = context.object_index_buffer.handle;
+    }
 
     // Issue the draw
     vkCmdDrawIndexed(command_buffer->handle, 6, 1, 0, 0, 0);

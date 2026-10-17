@@ -11,8 +11,20 @@
 #include "renderer/vulkan/vulkan_shader_utils.h"
 #include "renderer/vulkan/vulkan_pipeline.h"
 #include "renderer/vulkan/vulkan_buffer.h"
+#include "renderer/vulkan/vulkan_profiler.h"
 
 #define BUILTIN_SHADER_NAME_OBJECT "Builtin.ObjectShader"
+
+// The per-draw KINFO lines below run for every object every frame and write to both the
+// console and console.log. KENGINE_DRAW_LOGS=0 turns them off so their cost can be
+// measured. Defaults to on, which keeps the original behaviour.
+static b8 draw_logs_enabled(void) {
+    static i32 state = -1;
+    if (state < 0) {
+        state = vulkan_profiler_env_flag("KENGINE_DRAW_LOGS", true) ? 1 : 0;
+    }
+    return state == 1;
+}
 
 b8 vulkan_object_shader_create(vulkan_context* context, texture* default_diffuse, vulkan_material_shader* out_shader) {
     // take a copy of the default diffuse texture for use in the shader
@@ -173,10 +185,14 @@ b8 vulkan_object_shader_create(vulkan_context* context, texture* default_diffuse
     alloc_info.pSetLayouts = global_layouts;
 
     VK_CHECK(vkAllocateDescriptorSets(context->device.logical_device, &alloc_info, out_shader->global_descriptor_sets));
-    // create the object uniform buffer
+    // create the object uniform buffer. update_object addresses it at
+    // sizeof(object_uniform_object) * object_id, so it has to hold every object the
+    // engine allows (VULKAN_OBJECT_MAX_OBJECTS_COUNT), not just the first one.
+    // NOTE: that stride (48 bytes) only satisfies minUniformBufferOffsetAlignment on
+    // devices where it is 16 (Apple GPUs); other GPUs would need a rounded-up stride.
     if (!vulkan_buffer_create(
             context,
-            sizeof(object_uniform_object),
+            sizeof(object_uniform_object) * VULKAN_OBJECT_MAX_OBJECTS_COUNT,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             true,
@@ -291,7 +307,9 @@ void vulkan_object_shader_update_object(vulkan_context* context, struct vulkan_m
     }
     descriptor_index++;
 
-    KINFO("tex0=%p gen=%u", (void*)data->textures[0], data->textures[0] ? data->textures[0]->generation : 0);
+    if (draw_logs_enabled()) {
+        KINFO("tex0=%p gen=%u", (void*)data->textures[0], data->textures[0] ? data->textures[0]->generation : 0);
+    }
     const u32 sampler_count = 1;
     VkDescriptorImageInfo image_infos[1];
     for (u32 sampler_index = 0; sampler_index < sampler_count; ++sampler_index) {
@@ -309,7 +327,9 @@ void vulkan_object_shader_update_object(vulkan_context* context, struct vulkan_m
 
         if (t && (*descriptor_generation != t->generation || *descriptor_generation == INVALID_ID)) {
             vulkan_texture_data* internal_data = (vulkan_texture_data*)t->internal_data;
-            KINFO("writing sampler: obj=%u img=%u view=%p sampler=%p", data->object_id, image_index, (void*)internal_data->image.view, (void*)internal_data->sampler);
+            if (draw_logs_enabled()) {
+                KINFO("writing sampler: obj=%u img=%u view=%p sampler=%p", data->object_id, image_index, (void*)internal_data->image.view, (void*)internal_data->sampler);
+            }
             // assign view and sampler
             image_infos[sampler_index].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             image_infos[sampler_index].imageView = internal_data->image.view;

@@ -7,6 +7,7 @@
 
 #include "core/kstring.h"
 #include "core/event.h"
+#include "vulkan/vulkan_profiler.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "vendor/stb_image.h"
@@ -240,7 +241,27 @@ b8 renderer_draw_frame(render_packet* packet) {
         data.object_id = 0;
         data.model = model;
         data.textures[0] = &state_ptr->test_diffuse;  // use the test diffuse texture for the object
-        state_ptr->backend.update_object(&data);
+
+        // KENGINE_STRESS_DRAWS=N draws N small quads on a grid to exercise per-draw cost.
+        // At the default of 1 this is the original single spinning quad.
+        const u32 draw_count = vulkan_profiler_stress_draws();
+        if (draw_count == 1) {
+            state_ptr->backend.update_object(&data);
+        } else {
+            u32 columns = 1;
+            while (columns * columns < draw_count) {
+                columns++;
+            }
+            const f32 spacing = 0.6f;
+            const mat4 scale = mat4_scale(vec3_create(0.05f, 0.05f, 0.05f));
+            for (u32 i = 0; i < draw_count; ++i) {
+                f32 x = ((f32)(i % columns) - (f32)columns * 0.5f) * spacing;
+                f32 y = ((f32)(i / columns) - (f32)columns * 0.5f) * spacing;
+                data.object_id = i;
+                data.model = mat4_mul(scale, mat4_translation(vec3_create(x, y, 0.0f)));
+                state_ptr->backend.update_object(&data);
+            }
+        }
 
         b8 result = renderer_end_frame(packet->delta_time);
         if (!result) {
