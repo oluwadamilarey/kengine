@@ -579,7 +579,7 @@ i32 find_memory_index(u32 type_filter, u32 property_flags) {
     vkGetPhysicalDeviceMemoryProperties(context.device.physical_device, &memory_properties);
 
     for (u32 i = 0; i < memory_properties.memoryTypeCount; ++i) {
-        // Check each memory type to see if its bit is set to 1.
+        // Check each memory type to see if it's bit is set to 1.
         if (type_filter & (1 << i) && (memory_properties.memoryTypes[i].propertyFlags & property_flags) == property_flags) {
             return i;
         }

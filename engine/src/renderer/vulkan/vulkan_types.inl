@@ -162,7 +162,7 @@ typedef struct vulkan_object_shader_object_state {
 
 // agboolaod@gmail.com
 
-typedef struct vulkan_object_shader {
+typedef struct vulkan_material_shader {
     // vertex and fragment shader stages for the object shader.
     vulkan_shader_stage stages[OBJECT_SHADER_STAGE_COUNT];
 
@@ -192,7 +192,7 @@ typedef struct vulkan_object_shader {
 
     vulkan_pipeline pipeline;
     texture* default_diffuse;
-} vulkan_object_shader;
+} vulkan_material_shader;
 
 typedef struct vulkan_context {
     u32 framebuffer_width;
@@ -233,7 +233,7 @@ typedef struct vulkan_context {
     u32 image_index;
     u32 current_frame;
 
-    vulkan_object_shader object_shader;
+    vulkan_material_shader object_shader;
 
     u64 geometry_vertex_offset;
     u64 geometry_index_offset;
