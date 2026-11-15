@@ -10,7 +10,7 @@ COMPILER_FLAGS := -g -MD \
                   -Werror=vla-extension \
                   -fdeclspec \
                   -fPIC
-INCLUDE_FLAGS := -Iengine/src -Itestbed/src
+INCLUDE_FLAGS := -Iengine/src -Itestbed/src -I$(VULKAN_SDK)/include
 LINKER_FLAGS := -g \
 	-L./$(BUILD_DIR) \
 	-lengine \

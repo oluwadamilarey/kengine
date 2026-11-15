@@ -17,7 +17,7 @@
 #include "platform/platform.h"
 #include "math/kmath.h"
 #include "vulkan_buffer.h"
-#include "shaders/vulkan_object_shader.h"
+#include "shaders/vulkan_material_shader.h"
 #include "vulkan_pipeline.h"
 #include "resources/resource_types.h"
 #include "vulkan_image.h"
@@ -236,7 +236,7 @@ b8 vulkan_renderer_backend_initialize(renderer_backend* backend, const char* app
         context.images_in_flight[i] = 0;
     }
     // create builtin shaders
-    if (!vulkan_object_shader_create(&context, backend->default_diffuse, &context.object_shader)) {
+    if (!vulkan_material_shader_create(&context, backend->default_diffuse, &context.object_shader)) {
         KERROR("Error loading builtin basic lighting shader.");
         return false;
     }
@@ -289,7 +289,7 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend) {
     // Destroy buffers
     vulkan_buffer_destroy(&context, &context.object_vertex_buffer);
     vulkan_buffer_destroy(&context, &context.object_index_buffer);
-    vulkan_object_shader_destroy(&context, &context.object_shader);
+    vulkan_material_shader_destroy(&context, &context.object_shader);
     // Destroy in the opposite order of creation.
     // Sync objects
     for (u8 i = 0; i < context.swapchain.max_frames_in_flight; ++i) {

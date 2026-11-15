@@ -11,9 +11,9 @@
 
 // void vulkan_object_shader_use(vulkan_object_shaders* shaders, vulkan_context* context);
 
-b8 vulkan_object_shader_create(vulkan_context* context, texture* default_diffuse, vulkan_material_shader* out_shader);
+b8 vulkan_material_shader_create(vulkan_context* context, texture* default_diffuse, vulkan_material_shader* out_shader);
 
-void vulkan_object_shader_destroy(vulkan_context* context, struct vulkan_material_shader* shader);
+void vulkan_material_shader_destroy(vulkan_context* context, struct vulkan_material_shader* shader);
 
 void vulkan_object_shader_use(vulkan_context* context, struct vulkan_material_shader* shader);
 

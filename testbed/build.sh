@@ -13,7 +13,7 @@ assembly="testbed"
 compilerFlags="-g -fdeclspec -fPIC" 
 # -fms-extensions 
 # -Wall -Werror
-includeFlags="-Isrc -I../engine/src/"
+includeFlags="-Isrc -I../engine/src/ -I$VULKAN_SDK/include"
 linkerFlags="-L../bin/ -lengine -Wl,-rpath,."
 defines="-D_DEBUG -DKIMPORT"
 

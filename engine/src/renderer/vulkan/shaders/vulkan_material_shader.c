@@ -1,4 +1,4 @@
-#include "vulkan_object_shader.h"
+#include "vulkan_material_shader.h"
 
 #include <stddef.h>
 
@@ -12,9 +12,9 @@
 #include "renderer/vulkan/vulkan_pipeline.h"
 #include "renderer/vulkan/vulkan_buffer.h"
 
-#define BUILTIN_SHADER_NAME_OBJECT "Builtin.ObjectShader"
+#define BUILTIN_SHADER_NAME_MATERIAL "Builtin.MaterialShader"
 
-b8 vulkan_object_shader_create(vulkan_context* context, texture* default_diffuse, vulkan_material_shader* out_shader) {
+b8 vulkan_material_shader_create(vulkan_context* context, texture* default_diffuse, vulkan_material_shader* out_shader) {
     // take a copy of the default diffuse texture for use in the shader
     out_shader->default_diffuse = default_diffuse;
 
@@ -22,11 +22,11 @@ b8 vulkan_object_shader_create(vulkan_context* context, texture* default_diffuse
     char stage_type_strs[OBJECT_SHADER_STAGE_COUNT][5] = {"vert", "frag"};
     VkShaderStageFlagBits stage_types[OBJECT_SHADER_STAGE_COUNT] = {VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
     for (u32 i = 0; i < OBJECT_SHADER_STAGE_COUNT; ++i) {
-        if (!create_shader_module(context, BUILTIN_SHADER_NAME_OBJECT, stage_type_strs[i], stage_types[i], i, out_shader->stages)) {
-            KERROR("Unable to create %s shader module for '%s'.", stage_type_strs[i], BUILTIN_SHADER_NAME_OBJECT);
+        if (!create_shader_module(context, BUILTIN_SHADER_NAME_MATERIAL, stage_type_strs[i], stage_types[i], i, out_shader->stages)) {
+            KERROR("Unable to create %s shader module for '%s'.", stage_type_strs[i], BUILTIN_SHADER_NAME_MATERIAL);
             return false;
         }
-    }
+    } 
     // Global Descriptors
     VkDescriptorSetLayoutBinding global_descriptor_bindings[1];
     global_descriptor_bindings[0].binding = 0;
@@ -188,7 +188,7 @@ b8 vulkan_object_shader_create(vulkan_context* context, texture* default_diffuse
     return true;
 }
 
-void vulkan_object_shader_destroy(vulkan_context* context, struct vulkan_material_shader* shader) {
+void vulkan_material_shader_destroy(vulkan_context* context, struct vulkan_material_shader* shader) {
     VkDevice logical_device = context->device.logical_device;
     vkDestroyDescriptorPool(logical_device, shader->object_descriptor_pool, context->allocator);
     vkDestroyDescriptorSetLayout(logical_device, shader->object_descriptor_set_layout, context->allocator);
