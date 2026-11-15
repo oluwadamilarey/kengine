@@ -22,3 +22,5 @@ void vulkan_renderer_create_texture(const char* name,
                                     texture* out_texture);
 
 void vulkan_renderer_destroy_texture(struct texture* texture);
+
+// tesr
