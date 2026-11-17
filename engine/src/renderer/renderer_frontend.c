@@ -38,7 +38,7 @@ b8 load_texture(const char* texture_name, texture* t) {
     i32 width, height, channel_count;
     char full_file_path[512];
 
-    // TODO: Determine the file extension based on the file type. For now, we will assume all textures are PNGs. try differnt extensions
+    // TODO: Determine the file extension based on the file type. For now, we will assume all textures are PNGs. try different extensions
     string_format(full_file_path, format_string, texture_name, "png");
 
     // use a temp texture to load data
@@ -253,14 +253,13 @@ b8 renderer_draw_frame(render_packet* packet) {
 }
 
 void renderer_create_texture(const char* name,
-                             b8 auto_release,
                              i32 width,
                              i32 height,
                              i32 channel_count,
                              b8 has_transparency,
                              const u8* pixels,
                              struct texture* out_texture) {
-    state_ptr->backend.create_texture(name, auto_release, width, height, channel_count, has_transparency, pixels, out_texture);
+    state_ptr->backend.create_texture(name, width, height, channel_count, has_transparency, pixels, out_texture);
 };
 
 void renderer_destroy_texture(struct texture* texture) {

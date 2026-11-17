@@ -14,9 +14,9 @@
 
 #define BUILTIN_SHADER_NAME_MATERIAL "Builtin.MaterialShader"
 
-b8 vulkan_material_shader_create(vulkan_context* context, texture* default_diffuse, vulkan_material_shader* out_shader) {
+b8 vulkan_material_shader_create(vulkan_context* context, vulkan_material_shader* out_shader) {
     // take a copy of the default diffuse texture for use in the shader
-    out_shader->default_diffuse = default_diffuse;
+    out_shader->default_diffuse = 0;
 
     // Shader module init per stage.
     char stage_type_strs[OBJECT_SHADER_STAGE_COUNT][5] = {"vert", "frag"};

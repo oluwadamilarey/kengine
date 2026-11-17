@@ -13,7 +13,7 @@ b8 vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time);
 void vulkan_backend_update_object(geometry_render_data* data);
 
 void vulkan_renderer_create_texture(const char* name,
-                                    b8 auto_release,
+                                   // b8 auto_release,
                                     i32 width,
                                     i32 height,
                                     i32 channel_count,
@@ -23,4 +23,4 @@ void vulkan_renderer_create_texture(const char* name,
 
 void vulkan_renderer_destroy_texture(struct texture* texture);
 
-// tesr
+// test

@@ -10,8 +10,12 @@ KAPI char* string_duplicate(const char* str);
 // Case-sensitive string comparison. true if the same, otherwise false.
 KAPI b8 strings_equal(const char* str0, const char* str1);
 
+// Performs case-insensitive string comparison. true if the same, otherwise false.
+KAPI b8 strings_equali(const char* str0, const char* str1);
+
 // Performs string formatting to dest given format string and parameters.
 KAPI i32 string_format(char* dest, const char* format, ...);
+
 
 //
 /**
