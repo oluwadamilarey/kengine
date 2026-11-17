@@ -77,8 +77,10 @@ void kfree(void* block, u64 size, memory_tag tag) {
         KWARN("kfree called using MEMORY_TAG_UNKNOWN. Re-class this allocation.");
     }
 
-    state_ptr->stats.total_allocated -= size;
-    state_ptr->stats.tagged_allocations[tag] -= size;
+    if (state_ptr) {
+        state_ptr->stats.total_allocated -= size;
+        state_ptr->stats.tagged_allocations[tag] -= size;
+    }
 
     // TODO: Memory alignment
     platform_free(block, false);

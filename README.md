@@ -122,6 +122,11 @@ Used by:
 - `filesystem.*`
   - File utilities (currently used for asset loading and potentially logging).
 
+> **Deep dive:** see [`engine/src/platform/README.md`](engine/src/platform/README.md)
+> for a detailed walkthrough of the platform layer — especially how the clock
+> sources time from each OS, and how the macOS window system (NSWindow,
+> CAMetalLayer, close/resize flows, event pump, input translation) works.
+
 ### Renderer
 
 `engine/src/renderer`:
@@ -175,8 +180,8 @@ Used by:
 
   Shader sources used by the backend live in:
 
-  - `assets/shaders/Builtin.ObjectShader.vert.glsl`
-  - `assets/shaders/Builtin.ObjectShader.frag.glsl`
+  - `assets/shaders/Builtin.MaterialShader.vert.glsl`
+  - `assets/shaders/Builtin.MaterialShader.frag.glsl`
 
 ### Resources
 
@@ -202,7 +207,7 @@ The testbed is a small example game/app built on the engine.
   - Fills `app_config`:
     - Window origin `(100, 100)`.
     - Size `1280x720`.
-    - Window title `"Kohi Engine Testbed"`.
+    - Window title `"Engine Testbed"`.
   - Binds game callbacks:
     - `initialize` → `game_initialize`.
     - `update` → `game_update`.

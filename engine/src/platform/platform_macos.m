@@ -354,11 +354,23 @@ void platform_console_write_error(const char *message, u8 colour) {
  * Clock  –  signature matches platform.h exactly
  * ---------------------------------------------------------------------- */
 f64 platform_get_absolute_time(platform_state *plat_state) {
-    internal_state *state = (internal_state *)plat_state->internal_state;
-    u64 elapsed = mach_absolute_time() - state->start_time;
+    if (plat_state && plat_state->internal_state) {
+        internal_state *state = (internal_state *)plat_state->internal_state;
+        u64 elapsed = mach_absolute_time() - state->start_time;
+        return (f64)elapsed
+             * (f64)state->timebase_info.numer
+             / ((f64)state->timebase_info.denom * 1.0e9);
+    }
+
+    // Fallback for when the platform system isn't initialized (e.g. unit tests).
+    static mach_timebase_info_data_t fallback_timebase;
+    if (fallback_timebase.denom == 0) {
+        mach_timebase_info(&fallback_timebase);
+    }
+    u64 elapsed = mach_absolute_time();
     return (f64)elapsed
-         * (f64)state->timebase_info.numer
-         / ((f64)state->timebase_info.denom * 1.0e9);
+         * (f64)fallback_timebase.numer
+         / ((f64)fallback_timebase.denom * 1.0e9);
 }
 
 void platform_sleep(u64 ms) {

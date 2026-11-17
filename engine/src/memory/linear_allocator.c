@@ -32,9 +32,8 @@ void linear_allocator_destroy(linear_allocator* allocator) {
         allocator->allocated = 0;
         if (allocator->owns_memory && allocator->memory) {
             kfree(allocator->memory, allocator->total_size, MEMORY_TAG_ARRAY);
-        } else {
-            allocator->memory = 0;
         }
+        allocator->memory = 0;
         allocator->total_size = 0;
         allocator->owns_memory = false;
     }
