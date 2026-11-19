@@ -200,7 +200,6 @@ void vulkan_material_shader_destroy(vulkan_context* context, struct vulkan_mater
     vkDestroyDescriptorPool(logical_device, shader->global_descriptor_pool, context->allocator);
     // destroy descriptor set layouts
     vkDestroyDescriptorSetLayout(logical_device, shader->global_descriptor_set_layout, context->allocator);
-
     // Destroy shader modules.
     for (u32 i = 0; i < OBJECT_SHADER_STAGE_COUNT; ++i) {
         vkDestroyShaderModule(context->device.logical_device, shader->stages[i].handle, context->allocator);

@@ -26,74 +26,6 @@ typedef struct renderer_system_state {
 // linear allocator — this module never allocates or frees it itself.
 static renderer_system_state* state_ptr;
 
-void create_texture(texture* texture) {
-    kzero_memory(texture, sizeof(texture));
-    texture->generation = INVALID_ID;
-}
-
-b8 load_texture(const char* texture_name, texture* t) {
-    char* format_string = "assets/textures/%s.%s";
-    const i32 required_channel_count = 4;
-    stbi_set_flip_vertically_on_load(true);
-    i32 width, height, channel_count;
-    char full_file_path[512];
-
-    // TODO: Determine the file extension based on the file type. For now, we will assume all textures are PNGs. try different extensions
-    string_format(full_file_path, format_string, texture_name, "png");
-
-    // use a temp texture to load data
-    texture temp_texture;
-
-    u8* data = stbi_load(full_file_path, (i32*)&temp_texture.width, (i32*)&temp_texture.height, (i32*)&channel_count, required_channel_count);
-
-    temp_texture.channel_count = required_channel_count;
-    temp_texture.has_transparency = (channel_count == 4) ? true : false;
-
-    if (data) {
-        u32 current_generation = t->generation;
-        t->generation = INVALID_ID;  // mark the texture as invalid until it is fully loaded
-        u64 total_size = (u64)temp_texture.width * temp_texture.height * required_channel_count;
-        // check for transperency in the texture data
-        for (u64 i = 0; i < total_size; i += required_channel_count) {
-            u8 alpha = data[i + 3];
-            if (alpha < 255) {
-                temp_texture.has_transparency = true;
-                break;
-            }
-        }
-
-        // acquire internal resources and upload to the GPU
-        renderer_create_texture(
-            texture_name,
-            true,  // auto_release
-            temp_texture.width,
-            temp_texture.height,
-            temp_texture.channel_count,
-            temp_texture.has_transparency,
-            data,
-            &temp_texture);
-
-        // take a copy of the old texture
-        texture old = *t;
-        *t = temp_texture;
-        t->generation = current_generation + 1;  // increment the generation to indicate that
-
-        // destroy the old texture if it was valid
-        if (old.generation != INVALID_ID) {
-            renderer_destroy_texture(&old);
-        }
-
-        stbi_image_free(data);
-        return true;
-    } else {
-        if (stbi_failure_reason()) {
-            KWARN("Failed to load texture: %s. Reason: %s", full_file_path, stbi_failure_reason());
-        } else {
-            KWARN("Failed to load texture: %s. Unknown reason.", full_file_path);
-        }
-        return false;
-    }
-}
 
 b8 event_on_debug_event(u16 code, void* sender, void* listener_inst, event_context data) {
     const char* names[3] = {
@@ -120,7 +52,7 @@ b8 renderer_system_initialize(u64* memory_requirement, void* state, const char* 
     event_register(EVENT_CODE_DEBUG0, state_ptr, event_on_debug_event);
 
     // take a pointer to the default textures for use on the backend
-    state_ptr->backend.default_diffuse = &state_ptr->default_texture;
+    state_ptr->backend.default_diffuse = &state_ptr->default_texture; 
 
     if (!renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, plat_state, &state_ptr->backend)) {
         KFATAL("Failed to create renderer backend.");
@@ -142,47 +74,7 @@ b8 renderer_system_initialize(u64* memory_requirement, void* state, const char* 
     state_ptr->view = mat4_translation((vec3){0, 0, -30.0f});
     state_ptr->view = mat4_inverse(state_ptr->view);
 
-    KTRACE("creating default texture...");
-    const u32 tex_dimension = 256;
-
-    const u32 channels = 4;
-    const u32 pixel_count = tex_dimension * tex_dimension;
-    // Allocate a contiguous pixel buffer (RGBA8)
-    u8* pixels = (u8*)kallocate(pixel_count * channels * sizeof(u8), MEMORY_TAG_RENDERER);
-    kset_memory(pixels, 255, pixel_count * channels * sizeof(u8));
-
-    // each pixel
-    for (u64 row = 0; row < tex_dimension; ++row) {
-        for (u64 col = 0; col < tex_dimension; ++col) {
-            u64 index = (row * tex_dimension) + col;
-            u64 index_bpp = index * channels;
-            if (row % 2) {
-                if (col % 2) {
-                    pixels[index_bpp + 0] = 0;
-                    pixels[index_bpp + 1] = 0;
-                }
-            } else {
-                if (!(col % 2)) {
-                    pixels[index_bpp + 0] = 0;
-                    pixels[index_bpp + 1] = 0;
-                }
-            }
-        }
-    }
-
-    renderer_create_texture(
-        "default",
-        false,
-        tex_dimension,
-        tex_dimension,
-        channels,
-        true,  // has_transparency
-        pixels,
-        &state_ptr->default_texture);
-
-    // Pixels are uploaded to the GPU by create_texture; free the CPU copy.
-    kfree(pixels, pixel_count * channels * sizeof(u8), MEMORY_TAG_RENDERER);
-
+    
     // TODO: load other textures here, or provide a way for the application to load them.
     create_texture(&state_ptr->test_diffuse);
     if (!load_texture("paving", &state_ptr->test_diffuse)) {
